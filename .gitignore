@@ -51,6 +51,7 @@ ExportedObj/
 *.csproj
 *.unityproj
 *.sln
+*.slnx
 *.suo
 *.tmp
 *.user
@@ -105,3 +106,15 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Packs Unity Asset Store : non versionnés (licence + poids LFS).
+# Chaque développeur les réimporte depuis son compte Asset Store ; les GUID étant
+# stables par package, les références des scènes se rebranchent automatiquement.
+/Assets/MotoInteractionAnimsFREE/
+/Assets/MotoInteractionAnimsFREE.meta
+/Assets/MotorcyclePack_/
+/Assets/MotorcyclePack_.meta
+/Assets/Honda Motor Co., Ltd/
+/Assets/Honda Motor Co., Ltd.meta
+/Assets/Versatile Studio Assets/
+/Assets/Versatile Studio Assets.meta
