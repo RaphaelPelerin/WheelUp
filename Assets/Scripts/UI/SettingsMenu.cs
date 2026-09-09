@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using WheelingMoto.Core;
@@ -22,7 +23,7 @@ namespace WheelingMoto.UI
         StepperWidget sfxStepper;
 
         Button removeAdsButton;
-        Text removeAdsStateText;
+        TextMeshProUGUI removeAdsStateText;
 
         public void Build(Transform parent, UITheme t)
         {
@@ -84,7 +85,8 @@ namespace WheelingMoto.UI
 
             removeAdsButton = UIFactory.AddButton(right.transform, "RemoveAdsButton",
                 $"Retirer les publicités — {MonetizationManager.RemoveAdsPrice}", theme.Accent, Color.white, 18,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -324), new Vector2(-22, -266), OnRemoveAdsPressed);
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -324), new Vector2(-22, -266), OnRemoveAdsPressed,
+                ButtonKind.Primary);
 
             UpdateQualityLabel();
             UpdateMasterLabel();

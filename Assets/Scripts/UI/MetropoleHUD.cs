@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -11,8 +12,8 @@ namespace WheelingMoto.UI
     {
         MotorcycleController controller;
         UITheme theme;
-        Text speedText;
-        Text fallText;
+        TextMeshProUGUI speedText;
+        TextMeshProUGUI fallText;
         bool leftHeld;
         bool rightHeld;
 

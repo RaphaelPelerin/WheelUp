@@ -1,4 +1,5 @@
 using System.Collections;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -14,7 +15,7 @@ namespace WheelingMoto.UI
     {
         readonly UITheme theme = new UITheme();
         Image progressFill;
-        Text statusText;
+        TextMeshProUGUI statusText;
 
         void Awake()
         {

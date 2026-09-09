@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,7 +8,7 @@ namespace WheelingMoto.UI
     public class StepperWidget
     {
         public GameObject Root;
-        public Text Label;
+        public TextMeshProUGUI Label;
         public Button PrevButton;
         public Button NextButton;
     }

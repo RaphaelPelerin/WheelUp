@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -8,23 +9,53 @@ using UnityEngine.InputSystem.UI;
 
 namespace WheelingMoto.UI
 {
+    /// <summary>Classes de boutons disponibles via AddButton (portent chacune un traitement visuel différent).</summary>
+    public enum ButtonKind
+    {
+        /// <summary>Rectangle arrondi plein, sans relief : onglets, cartes, lignes de liste.</summary>
+        Filled,
+        /// <summary>Comme Filled, avec une ombre portée : action principale d'un écran (CTA).</summary>
+        Primary,
+    }
+
     /// <summary>
-    /// Construit l'interface entièrement par code (Canvas, panneaux, boutons, texte),
-    /// sans dépendre de prefabs ou de TextMeshPro, pour que tout le menu tienne dans les scripts.
+    /// Construit l'interface entièrement par code (Canvas, panneaux, boutons, texte) via TextMeshPro,
+    /// sans dépendre de prefabs, pour que tout le menu tienne dans les scripts.
     /// </summary>
     public static class UIFactory
     {
-        static Font cachedFont;
+        static Sprite cachedRoundedSprite;
+        static TMP_FontAsset cachedFontAsset;
+        static readonly Color ShadowColor = new Color(0f, 0f, 0f, 0.35f);
+        static readonly Vector2 ShadowOffset = new Vector2(0f, -5f);
 
-        public static Font UIFont
+        /// <summary>
+        /// TextMeshPro n'a aucune police tant que "TMP Essential Resources" n'est pas importé, et tout
+        /// le texte reste alors invisible. On génère donc une police dynamique depuis la police intégrée
+        /// de Unity : le menu s'affiche sans dépendre d'un asset importé.
+        /// </summary>
+        static TMP_FontAsset UIFont
         {
             get
             {
-                if (cachedFont == null)
+                if (cachedFontAsset == null)
                 {
-                    cachedFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                    cachedFontAsset = TMP_FontAsset.CreateFontAsset(Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
                 }
-                return cachedFont;
+                return cachedFontAsset;
+            }
+        }
+
+        /// <summary>Sprite arrondi standard de Unity (celui du Button par défaut), utilisé pour tous les panneaux "rounded".</summary>
+        static Sprite RoundedSprite
+        {
+            get
+            {
+                if (cachedRoundedSprite == null)
+                {
+                    cachedRoundedSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+                }
+                return cachedRoundedSprite;
             }
         }
 
@@ -72,35 +103,64 @@ namespace WheelingMoto.UI
             rt.pivot = new Vector2(0.5f, 0.5f);
         }
 
-        public static Image AddPanel(Transform parent, string name, Color color, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        /// <summary>Panneau de fond. Passer rounded=true pour un rectangle à coins arrondis (cartes, boutons, badges).</summary>
+        public static Image AddPanel(Transform parent, string name, Color color, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax, bool rounded = false)
         {
             var rt = CreateUIObject(name, parent);
             SetRect(rt, anchorMin, anchorMax, offsetMin, offsetMax);
             var img = rt.gameObject.AddComponent<Image>();
+            if (rounded)
+            {
+                img.sprite = RoundedSprite;
+                img.type = Image.Type.Sliced;
+            }
             img.color = color;
             img.raycastTarget = color.a > 0f;
             return img;
         }
 
-        public static Text AddText(Transform parent, string name, string text, int fontSize, Color color, TextAnchor alignment, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        public static TextMeshProUGUI AddText(Transform parent, string name, string text, int fontSize, Color color, TextAnchor alignment, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax, FontStyles style = FontStyles.Normal)
         {
             var rt = CreateUIObject(name, parent);
             SetRect(rt, anchorMin, anchorMax, offsetMin, offsetMax);
-            var t = rt.gameObject.AddComponent<Text>();
-            t.text = text;
+            var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
             t.font = UIFont;
+            t.text = text;
             t.fontSize = fontSize;
             t.color = color;
-            t.alignment = alignment;
-            t.horizontalOverflow = HorizontalWrapMode.Wrap;
-            t.verticalOverflow = VerticalWrapMode.Truncate;
+            t.alignment = ToTMPAlignment(alignment);
+            t.fontStyle = style;
             t.raycastTarget = false;
             return t;
         }
 
-        public static Button AddButton(Transform parent, string name, string label, Color bgColor, Color textColor, int fontSize, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax, UnityAction onClick)
+        static TextAlignmentOptions ToTMPAlignment(TextAnchor anchor)
         {
-            var img = AddPanel(parent, name, bgColor, anchorMin, anchorMax, offsetMin, offsetMax);
+            switch (anchor)
+            {
+                case TextAnchor.UpperLeft: return TextAlignmentOptions.TopLeft;
+                case TextAnchor.UpperCenter: return TextAlignmentOptions.Top;
+                case TextAnchor.UpperRight: return TextAlignmentOptions.TopRight;
+                case TextAnchor.MiddleLeft: return TextAlignmentOptions.Left;
+                case TextAnchor.MiddleRight: return TextAlignmentOptions.Right;
+                case TextAnchor.LowerLeft: return TextAlignmentOptions.BottomLeft;
+                case TextAnchor.LowerCenter: return TextAlignmentOptions.Bottom;
+                case TextAnchor.LowerRight: return TextAlignmentOptions.BottomRight;
+                default: return TextAlignmentOptions.Center;
+            }
+        }
+
+        /// <summary>Bouton rectangulaire arrondi. kind=Primary ajoute une ombre portée pour les actions principales (CTA).</summary>
+        public static Button AddButton(Transform parent, string name, string label, Color bgColor, Color textColor, int fontSize, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax, UnityAction onClick, ButtonKind kind = ButtonKind.Filled)
+        {
+            if (kind == ButtonKind.Primary)
+            {
+                var shadow = AddPanel(parent, name + "_Shadow", ShadowColor, anchorMin, anchorMax,
+                    offsetMin + ShadowOffset, offsetMax + ShadowOffset, rounded: true);
+                shadow.raycastTarget = false;
+            }
+
+            var img = AddPanel(parent, name, bgColor, anchorMin, anchorMax, offsetMin, offsetMax, rounded: true);
             img.raycastTarget = true;
             var btn = img.gameObject.AddComponent<Button>();
 
@@ -115,7 +175,7 @@ namespace WheelingMoto.UI
             if (!string.IsNullOrEmpty(label))
             {
                 AddText(img.transform, "Label", label, fontSize, textColor, TextAnchor.MiddleCenter,
-                    Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                    Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, FontStyles.Bold);
             }
 
             if (onClick != null)
@@ -148,6 +208,50 @@ namespace WheelingMoto.UI
 
             widget.NextButton = AddButton(rt, "Next", "+", theme.PanelAlt, theme.Text, 26,
                 new Vector2(1, 0), new Vector2(1, 1), new Vector2(-64, 0), Vector2.zero, onNext);
+
+            return widget;
+        }
+
+        /// <summary>
+        /// Item de navigation façon barre latérale : pas de fond plein, juste un libellé et une barre
+        /// d'indicateur à gauche qui s'active quand l'item est sélectionné. locked=true grise l'item,
+        /// le rend non cliquable et ajoute une étiquette "BIENTÔT".
+        /// </summary>
+        public static NavItemWidget AddNavItem(Transform parent, string name, string label, UITheme theme, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax, UnityAction onClick, bool locked = false)
+        {
+            var rt = CreateUIObject(name, parent);
+            SetRect(rt, anchorMin, anchorMax, offsetMin, offsetMax);
+
+            var widget = new NavItemWidget { Root = rt.gameObject };
+
+            var rowImage = rt.gameObject.AddComponent<Image>();
+            rowImage.color = Color.clear;
+            rowImage.raycastTarget = true;
+
+            var btn = rt.gameObject.AddComponent<Button>();
+            btn.interactable = !locked;
+            if (onClick != null)
+            {
+                btn.onClick.AddListener(onClick);
+            }
+            widget.Button = btn;
+
+            widget.Indicator = AddPanel(rt, "Indicator", theme.Accent, new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, new Vector2(5, 0));
+            widget.Indicator.raycastTarget = false;
+            widget.Indicator.gameObject.SetActive(false);
+
+            widget.Label = AddText(rt, "Label", label, 26, locked ? theme.NavTextLocked : theme.NavTextInactive,
+                TextAnchor.MiddleLeft, Vector2.zero, Vector2.one, new Vector2(30, 0), new Vector2(-20, 0),
+                FontStyles.Bold | FontStyles.Italic);
+
+            if (locked)
+            {
+                var tag = AddPanel(rt, "SoonTag", theme.PanelAlt, new Vector2(1, 0.5f), new Vector2(1, 0.5f),
+                    new Vector2(-104, -16), new Vector2(-24, 16), rounded: true);
+                tag.raycastTarget = false;
+                AddText(tag.transform, "SoonLabel", "BIENTÔT", 12, theme.NavTextLocked, TextAnchor.MiddleCenter,
+                    Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, FontStyles.Bold);
+            }
 
             return widget;
         }

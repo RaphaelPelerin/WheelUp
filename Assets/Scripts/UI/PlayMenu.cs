@@ -66,7 +66,8 @@ namespace WheelingMoto.UI
             }
 
             UIFactory.AddButton(Root.transform, "PlayButton", "JOUER", theme.Accent, Color.white, 26,
-                new Vector2(0.5f, 0f), new Vector2(1f, 0f), new Vector2(10, 20), new Vector2(-30, 110), OnPlayPressed);
+                new Vector2(0.5f, 0f), new Vector2(1f, 0f), new Vector2(10, 20), new Vector2(-30, 110), OnPlayPressed,
+                ButtonKind.Primary);
 
             RefreshSelectionVisuals();
         }

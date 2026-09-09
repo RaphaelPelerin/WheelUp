@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using WheelingMoto.Core;
@@ -15,10 +16,10 @@ namespace WheelingMoto.UI
         readonly Dictionary<string, Button> motoButtons = new Dictionary<string, Button>();
         string selectedMoto;
 
-        Text coinsText;
-        Text detailNameText;
-        Text ownedStateText;
-        Text tuningStatusText;
+        TextMeshProUGUI coinsText;
+        TextMeshProUGUI detailNameText;
+        TextMeshProUGUI ownedStateText;
+        TextMeshProUGUI tuningStatusText;
         Button buyButton;
         StepperWidget tuningStepper;
         int tuningLevel = 1;
@@ -80,7 +81,8 @@ namespace WheelingMoto.UI
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -260), new Vector2(-24, -234));
 
             buyButton = UIFactory.AddButton(detail.transform, "BuyButton", "ACHETER LA MOTO", theme.Accent, Color.white, 20,
-                new Vector2(0, 0), new Vector2(1, 0), new Vector2(24, 30), new Vector2(-24, 96), OnBuyPressed);
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(24, 30), new Vector2(-24, 96), OnBuyPressed,
+                ButtonKind.Primary);
 
             SelectMoto(MotoCatalog.All[0].Name);
         }
