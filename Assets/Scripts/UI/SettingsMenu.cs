@@ -1,11 +1,10 @@
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 using WheelingMoto.Core;
 
 namespace WheelingMoto.UI
 {
-    /// <summary>Onglet Paramètres & Boutique : graphismes, audio, contrôles tactiles, retrait des pubs (5€).</summary>
+    /// <summary>Onglet Paramètres : graphismes, audio et rappel des contrôles tactiles.</summary>
     public class SettingsMenu
     {
         public GameObject Root { get; private set; }
@@ -22,8 +21,7 @@ namespace WheelingMoto.UI
         StepperWidget musicStepper;
         StepperWidget sfxStepper;
 
-        Button removeAdsButton;
-        TextMeshProUGUI removeAdsStateText;
+        TextMeshProUGUI adsStateText;
 
         public void Build(Transform parent, UITheme t)
         {
@@ -69,10 +67,10 @@ namespace WheelingMoto.UI
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -456), new Vector2(-22, -408),
                 () => AdjustSfx(-0.1f), () => AdjustSfx(0.1f));
 
-            var right = UIFactory.AddPanel(Root.transform, "Shop", theme.Panel,
+            var right = UIFactory.AddPanel(Root.transform, "Controls", theme.Panel,
                 new Vector2(0.5f, 0), new Vector2(1, 1), new Vector2(10, 10), new Vector2(-20, -60));
 
-            UIFactory.AddText(right.transform, "SectionTitle", "Contrôles & Boutique", 22, theme.Text, TextAnchor.MiddleLeft,
+            UIFactory.AddText(right.transform, "SectionTitle", "Contrôles", 22, theme.Text, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -56), new Vector2(-22, -16));
 
             UIFactory.AddText(right.transform, "ControlsInfo",
@@ -80,19 +78,16 @@ namespace WheelingMoto.UI
                 16, theme.TextMuted, TextAnchor.UpperLeft,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -220), new Vector2(-22, -76));
 
-            removeAdsStateText = UIFactory.AddText(right.transform, "AdsState", "", 15, theme.TextMuted, TextAnchor.UpperLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -256), new Vector2(-22, -228));
-
-            removeAdsButton = UIFactory.AddButton(right.transform, "RemoveAdsButton",
-                $"Retirer les publicités — {MonetizationManager.RemoveAdsPrice}", theme.Accent, Color.white, 18,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -324), new Vector2(-22, -266), OnRemoveAdsPressed,
-                ButtonKind.Primary);
+            // Les achats ont quitté cet écran pour l'onglet Boutique : ils y côtoient les lots de
+            // pièces, sous la même bannière que les coffres.
+            adsStateText = UIFactory.AddText(right.transform, "AdsState", "", 15, theme.TextMuted, TextAnchor.UpperLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -288), new Vector2(-22, -240));
 
             UpdateQualityLabel();
             UpdateMasterLabel();
             UpdateMusicLabel();
             UpdateSfxLabel();
-            RefreshShopState();
+            RefreshAdsState();
         }
 
         void PrevQuality()
@@ -141,17 +136,11 @@ namespace WheelingMoto.UI
 
         void UpdateSfxLabel() => sfxStepper.Label.text = $"{Mathf.RoundToInt(sfxVol * 100)}%";
 
-        void RefreshShopState()
+        void RefreshAdsState()
         {
-            bool removed = MonetizationManager.AdsRemoved;
-            removeAdsStateText.text = removed ? "Publicités désactivées." : "Des publicités s'affichent entre les parties.";
-            removeAdsButton.gameObject.SetActive(!removed);
-        }
-
-        void OnRemoveAdsPressed()
-        {
-            removeAdsButton.interactable = false;
-            MonetizationManager.PurchaseRemoveAds(success => RefreshShopState());
+            adsStateText.text = MonetizationManager.AdsRemoved
+                ? "Publicités désactivées."
+                : "Des publicités s'affichent entre les parties.\nLe retrait s'achète dans l'onglet Boutique.";
         }
     }
 }

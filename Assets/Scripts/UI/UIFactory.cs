@@ -26,13 +26,18 @@ namespace WheelingMoto.UI
     {
         static Sprite cachedRoundedSprite;
         static TMP_FontAsset cachedFontAsset;
+        // Rayon volontairement modeste : au-delà, la bordure du découpage en 9 tranches dépasse
+        // la moitié des petits éléments (pastilles de couleur, badges), Unity la comprime et le
+        // rectangle se lit alors comme une pilule ou une ellipse.
+        const int CornerRadius = 16;
         static readonly Color ShadowColor = new Color(0f, 0f, 0f, 0.35f);
         static readonly Vector2 ShadowOffset = new Vector2(0f, -5f);
 
         /// <summary>
-        /// TextMeshPro n'a aucune police tant que "TMP Essential Resources" n'est pas importé, et tout
-        /// le texte reste alors invisible. On génère donc une police dynamique depuis la police intégrée
-        /// de Unity : le menu s'affiche sans dépendre d'un asset importé.
+        /// Police de tout le menu. On prend celle de TextMeshPro (LiberationSans SDF, importée avec
+        /// les "TMP Essential Resources") : c'est un atlas SDF prêt à l'emploi, net à toute taille.
+        /// Si les ressources TMP manquent, on retombe sur une police dynamique construite depuis la
+        /// police système, pour que le texte reste lisible au lieu de disparaître.
         /// </summary>
         static TMP_FontAsset UIFont
         {
@@ -40,23 +45,105 @@ namespace WheelingMoto.UI
             {
                 if (cachedFontAsset == null)
                 {
-                    cachedFontAsset = TMP_FontAsset.CreateFontAsset(Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
+                    cachedFontAsset = TMP_Settings.defaultFontAsset;
+                }
+                if (cachedFontAsset == null)
+                {
+                    cachedFontAsset = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+                }
+                if (cachedFontAsset == null)
+                {
+                    cachedFontAsset = CreateFallbackFontAsset();
                 }
                 return cachedFontAsset;
             }
         }
 
-        /// <summary>Sprite arrondi standard de Unity (celui du Button par défaut), utilisé pour tous les panneaux "rounded".</summary>
+        /// <summary>
+        /// Dernier recours quand aucun asset TMP n'est disponible : on génère une police dynamique
+        /// depuis une police installée sur la machine. Resources.GetBuiltinResource&lt;Font&gt; ne
+        /// convient pas ici — la police intégrée de Unity n'expose pas ses données de glyphes, donc
+        /// TextMeshPro ne peut pas en tirer d'atlas et tout le texte reste vide.
+        /// </summary>
+        static TMP_FontAsset CreateFallbackFontAsset()
+        {
+            var names = Font.GetOSInstalledFontNames();
+            var preferred = new[] { "Arial", "Segoe UI", "Helvetica", "DejaVu Sans", "Liberation Sans" };
+
+            Font source = null;
+            foreach (var name in preferred)
+            {
+                if (System.Array.IndexOf(names, name) < 0) continue;
+                source = Font.CreateDynamicFontFromOSFont(name, 48);
+                if (source != null) break;
+            }
+
+            if (source == null && names != null && names.Length > 0)
+            {
+                source = Font.CreateDynamicFontFromOSFont(names[0], 48);
+            }
+
+            if (source == null)
+            {
+                Debug.LogWarning("Aucune police disponible : le texte du menu ne s'affichera pas.");
+                return null;
+            }
+
+            return TMP_FontAsset.CreateFontAsset(source);
+        }
+
+        /// <summary>
+        /// Rectangle arrondi utilisé par tous les panneaux "rounded". Il est dessiné à la volée
+        /// plutôt que repris des ressources intégrées de Unity : depuis Unity 6, les sprites d'UI
+        /// par défaut ne sont plus exposés via Resources.GetBuiltinResource, et l'appel échouait.
+        /// Le sprite est découpé en 9 tranches (bordure = rayon) pour s'étirer sans déformer les coins.
+        /// </summary>
         static Sprite RoundedSprite
         {
             get
             {
                 if (cachedRoundedSprite == null)
                 {
-                    cachedRoundedSprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+                    cachedRoundedSprite = CreateRoundedSprite(CornerRadius);
                 }
                 return cachedRoundedSprite;
             }
+        }
+
+        /// <summary>Texture blanche à coins arrondis, bords lissés par échantillonnage de la distance au coin.</summary>
+        static Sprite CreateRoundedSprite(int radius)
+        {
+            int size = radius * 2 + 2;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "RoundedRect",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    // Distance au disque du coin le plus proche : au-delà du rayon, le pixel s'efface.
+                    float cx = Mathf.Clamp(x + 0.5f, radius, size - radius);
+                    float cy = Mathf.Clamp(y + 0.5f, radius, size - radius);
+                    float distance = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(cx, cy));
+                    float alpha = Mathf.Clamp01(radius - distance + 0.5f);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(alpha * 255f));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+
+            var border = new Vector4(radius, radius, radius, radius);
+            var sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
+            sprite.name = "RoundedRect";
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+            return sprite;
         }
 
         public static Canvas CreateRootCanvas(string name)
@@ -184,6 +271,85 @@ namespace WheelingMoto.UI
             }
 
             return btn;
+        }
+
+        /// <summary>
+        /// Zone défilante verticale. Retourne le conteneur dans lequel empiler les éléments, ancré en haut :
+        /// les enfants se positionnent avec des Y négatifs, comme dans un panneau classique.
+        /// </summary>
+        public static RectTransform AddScrollView(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax, float contentHeight)
+        {
+            var viewport = CreateUIObject(name, parent);
+            SetRect(viewport, anchorMin, anchorMax, offsetMin, offsetMax);
+            viewport.gameObject.AddComponent<RectMask2D>();
+
+            var content = CreateUIObject("Content", viewport);
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.sizeDelta = new Vector2(0f, contentHeight);
+            content.anchoredPosition = Vector2.zero;
+
+            var scroll = viewport.gameObject.AddComponent<ScrollRect>();
+            scroll.viewport = viewport;
+            scroll.content = content;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Elastic;
+            scroll.scrollSensitivity = 35f;
+
+            return content;
+        }
+
+        /// <summary>Barre de statistique (libellé + jauge remplie), utilisée pour les caractéristiques des motos.</summary>
+        public static Image AddStatBar(Transform parent, string name, string label, UITheme theme, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            var row = CreateUIObject(name, parent);
+            SetRect(row, anchorMin, anchorMax, offsetMin, offsetMax);
+
+            AddText(row, "Label", label, 15, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, new Vector2(150, 0));
+
+            var track = AddPanel(row, "Track", theme.PanelAlt,
+                new Vector2(0, 0.5f), new Vector2(1, 0.5f), new Vector2(158, -8), new Vector2(0, 8), rounded: true);
+            track.raycastTarget = false;
+
+            var fill = AddPanel(track.transform, "Fill", theme.Accent,
+                new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero, rounded: true);
+            fill.raycastTarget = false;
+            fill.type = Image.Type.Filled;
+            fill.fillMethod = Image.FillMethod.Horizontal;
+            fill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            fill.fillAmount = 0f;
+
+            return fill;
+        }
+
+        /// <summary>
+        /// Halo radial : un dégradé doux sans bord, à poser derrière un aperçu 3D ou une icône. Il
+        /// remplace les panneaux rectangulaires, dont l'arête reste visible sur un fond sombre.
+        /// </summary>
+        public static Image AddGlow(Transform parent, string name, Color color, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            var rt = CreateUIObject(name, parent);
+            SetRect(rt, anchorMin, anchorMax, offsetMin, offsetMax);
+
+            var img = rt.gameObject.AddComponent<Image>();
+            img.sprite = FxAssets.RadialGlow;
+            img.type = Image.Type.Simple;
+            img.color = color;
+            img.raycastTarget = false;
+            return img;
+        }
+
+        /// <summary>Zone d'affichage pour une texture générée à l'exécution (ex: rendu 3D d'une moto).</summary>
+        public static RawImage AddRawImage(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            var rt = CreateUIObject(name, parent);
+            SetRect(rt, anchorMin, anchorMax, offsetMin, offsetMax);
+            var img = rt.gameObject.AddComponent<RawImage>();
+            img.raycastTarget = false;
+            return img;
         }
 
         /// <summary>Met à jour la couleur de fond "normale" d'un bouton créé avec AddButton (ex: état sélectionné).</summary>

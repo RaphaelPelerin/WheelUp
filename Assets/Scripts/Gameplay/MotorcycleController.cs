@@ -1,4 +1,5 @@
 using UnityEngine;
+using WheelingMoto.Data;
 
 namespace WheelingMoto.Gameplay
 {
@@ -55,13 +56,56 @@ namespace WheelingMoto.Gameplay
 
         void Awake()
         {
-            if (bikePrefab != null && visualPivot != null)
+            var model = bikePrefab != null ? bikePrefab : LoadCatalogModel();
+            if (model != null && visualPivot != null)
             {
-                var visual = Instantiate(bikePrefab, visualPivot);
+                var visual = Instantiate(model, visualPivot);
                 visual.transform.localPosition = new Vector3(0f, 0f, 0.55f);
                 visual.transform.localRotation = Quaternion.Euler(visualEulerOffset);
                 animator = visual.GetComponentInChildren<Animator>();
+
+                MotoPainter.Apply(visual, MotoCatalog.Default.Name);
             }
+
+            ApplyStats(MotoCatalog.Default);
+        }
+
+        /// <summary>
+        /// Traduit les caractéristiques de la moto (base du catalogue + améliorations achetées) en
+        /// valeurs de conduite. Les bornes définissent l'écart de sensation entre une 50cc et une hypersport.
+        /// </summary>
+        void ApplyStats(MotoInfo moto)
+        {
+            if (moto == null) return;
+
+            var stats = MotoStats.For(moto);
+            float power = stats.Power / MotoStats.MaxValue;
+            float handling = stats.Handling / MotoStats.MaxValue;
+            float wheelie = stats.Wheelie / MotoStats.MaxValue;
+
+            maxSpeed = Mathf.Lerp(9f, 30f, power);
+            acceleration = Mathf.Lerp(5f, 17f, power);
+            turnSpeed = Mathf.Lerp(60f, 130f, handling);
+
+            wheelieSpeed = Mathf.Lerp(40f, 80f, wheelie);
+            wheelieReturnSpeed = Mathf.Lerp(70f, 110f, wheelie);
+            // Une moto qui cabre bien tolère un angle plus grand avant la chute.
+            wheelieFallAngle = Mathf.Lerp(42f, 58f, wheelie);
+        }
+
+        // bikePrefab pointe sur un pack Asset Store non versionné : la référence est vide sur un poste
+        // qui ne l'a pas importé. On retombe alors sur le modèle de la moto de base, chargé depuis Resources.
+        GameObject LoadCatalogModel()
+        {
+            var moto = MotoCatalog.Default;
+            if (moto == null || string.IsNullOrEmpty(moto.ModelResourcePath)) return null;
+
+            var model = Resources.Load<GameObject>(moto.ModelResourcePath);
+            if (model == null)
+            {
+                Debug.LogWarning($"Modèle introuvable pour {moto.Name} : Resources/{moto.ModelResourcePath}");
+            }
+            return model;
         }
 
         public void SetThrottle(bool held) => inputThrottle = held;
