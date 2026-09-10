@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -19,8 +20,8 @@ namespace WheelingMoto.UI
         MotorcycleController controller;
         MotoCameraRig cameraRig;
         UITheme theme;
-        Text speedText;
-        Text viewLabel;
+        TextMeshProUGUI speedText;
+        TextMeshProUGUI viewLabel;
         CameraView displayedView;
         WheelieGauge gauge;
         CanvasGroup fallOverlay;
@@ -98,7 +99,7 @@ namespace WheelingMoto.UI
                 var viewButton = UIFactory.AddButton(root, "ViewButton", "VUE", theme.PanelAlt, theme.Text, 16,
                     new Vector2(1, 1), new Vector2(1, 1), new Vector2(-340, -60), new Vector2(-200, -20),
                     () => cameraRig.ToggleView());
-                viewLabel = viewButton.GetComponentInChildren<Text>();
+                viewLabel = viewButton.GetComponentInChildren<TextMeshProUGUI>();
                 RefreshViewLabel();
             }
 

@@ -3,6 +3,7 @@ using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
+using WheelingMoto.Data;
 
 namespace WheelingMoto.Gameplay
 {
@@ -277,6 +278,21 @@ namespace WheelingMoto.Gameplay
             }
         }
 
+        // bikePrefab pointe sur un pack Asset Store non versionné : la référence est vide sur un poste
+        // qui ne l'a pas importé. On retombe alors sur le modèle de la moto de base, chargé depuis Resources.
+        GameObject LoadCatalogModel()
+        {
+            var moto = MotoCatalog.Default;
+            if (moto == null || string.IsNullOrEmpty(moto.ModelResourcePath)) return null;
+
+            var model = Resources.Load<GameObject>(moto.ModelResourcePath);
+            if (model == null)
+            {
+                Debug.LogWarning($"Modèle introuvable pour {moto.Name} : Resources/{moto.ModelResourcePath}");
+            }
+            return model;
+        }
+
         void Awake()
         {
             if (!TryGetComponent(out body))
@@ -297,11 +313,13 @@ namespace WheelingMoto.Gameplay
                 visualPivot.localPosition = new Vector3(0f, -body.skinWidth, rearContactZ);
                 visualPivot.localRotation = Quaternion.identity;
 
-                if (bikePrefab != null)
+                GameObject prefab = bikePrefab != null ? bikePrefab : LoadCatalogModel();
+                if (prefab != null)
                 {
-                    visual = Instantiate(bikePrefab, visualPivot);
+                    visual = Instantiate(prefab, visualPivot);
                     visual.transform.localPosition = new Vector3(0f, modelGroundOffset, -rearContactZ);
                     visual.transform.localRotation = Quaternion.Euler(visualEulerOffset);
+                    MotoPainter.Apply(visual, MotoCatalog.Default.Name);
 
                     // Le prefab n'a pas d'Animator : guidon, freins et fourche sont posés par le code (LateUpdate).
                     Transform model = visual.transform;

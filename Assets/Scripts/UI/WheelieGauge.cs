@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using WheelingMoto.Gameplay;
@@ -27,8 +28,8 @@ namespace WheelingMoto.UI
         Image frame;
         RectTransform marker;
         Image markerImage;
-        Text angleText;
-        Text statusText;
+        TextMeshProUGUI angleText;
+        TextMeshProUGUI statusText;
 
         public void Build(Transform parent, UITheme theme, MotorcycleController target)
         {

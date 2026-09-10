@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace WheelingMoto.Core
@@ -7,10 +8,17 @@ namespace WheelingMoto.Core
     {
         const string KeyCoins = "economy_coins";
 
+        /// <summary>Émis à chaque variation du solde : le badge de pièces du menu s'y abonne.</summary>
+        public static event Action Changed;
+
         public static int Coins
         {
             get => PlayerPrefs.GetInt(KeyCoins, 500);
-            private set => PlayerPrefs.SetInt(KeyCoins, value);
+            private set
+            {
+                PlayerPrefs.SetInt(KeyCoins, value);
+                Changed?.Invoke();
+            }
         }
 
         public static void AddCoins(int amount)
@@ -24,6 +32,13 @@ namespace WheelingMoto.Core
             if (amount <= 0 || Coins < amount) return false;
             Coins -= amount;
             return true;
+        }
+
+        /// <summary>Fixe le solde directement. Réservé aux outils de test.</summary>
+        public static void SetCoins(int amount)
+        {
+            Coins = Mathf.Max(0, amount);
+            PlayerPrefs.Save();
         }
     }
 }

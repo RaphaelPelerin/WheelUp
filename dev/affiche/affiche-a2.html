@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Degrade A2 — WheelUp</title>
+<style>
+  :root{
+    --bg:#0d0c18;
+    --panel:#15142400;
+    --line:rgba(255,255,255,.10);
+    --txt:#e8e6f2;
+    --dim:#9a96b4;
+    --accent:#8b7ad6;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg);
+    color:var(--txt);
+    font:14px/1.45 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  header{
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+    padding:18px 24px 14px;border-bottom:1px solid var(--line);
+  }
+  h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.01em}
+  header .meta{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+  main{flex:1;display:flex;gap:0;min-height:0;flex-wrap:wrap}
+
+  /* ---- panneau de controle ---- */
+  aside{
+    width:290px;flex:0 0 290px;border-right:1px solid var(--line);
+    padding:22px 24px;display:flex;flex-direction:column;gap:22px;overflow:auto;
+  }
+  .field{display:flex;flex-direction:column;gap:8px}
+  .field > label{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{
+    flex:1;appearance:none;border:0;background:transparent;color:var(--dim);
+    padding:9px 4px;font:inherit;font-size:13px;cursor:pointer;transition:background .15s,color .15s;
+  }
+  .seg button + button{border-left:1px solid var(--line)}
+  .seg button:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+  .seg button[aria-pressed=true]{background:rgba(139,122,214,.22);color:#fff}
+
+  .row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--txt)}
+  .row input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
+
+  button.go{
+    appearance:none;border:1px solid rgba(139,122,214,.55);
+    background:linear-gradient(180deg,rgba(139,122,214,.30),rgba(139,122,214,.16));
+    color:#fff;font:inherit;font-weight:600;padding:13px 16px;border-radius:9px;cursor:pointer;
+    transition:filter .15s;
+  }
+  button.go:hover{filter:brightness(1.18)}
+  button.go:disabled{opacity:.5;cursor:progress}
+
+  .hint{font-size:12px;color:var(--dim);border-top:1px solid var(--line);padding-top:16px}
+  .hint code{color:#c3bce6;font-size:11.5px}
+  .out{font-size:12px;color:var(--dim);min-height:1.4em;font-variant-numeric:tabular-nums}
+
+  /* ---- apercu ---- */
+  section.stage{
+    flex:1;min-width:320px;display:grid;place-items:center;padding:32px;overflow:auto;
+    background:
+      linear-gradient(45deg,rgba(255,255,255,.018) 25%,transparent 25%,transparent 75%,rgba(255,255,255,.018) 75%) 0 0/22px 22px,
+      linear-gradient(45deg,rgba(255,255,255,.018) 25%,transparent 25%,transparent 75%,rgba(255,255,255,.018) 75%) 11px 11px/22px 22px;
+  }
+  .frame{
+    position:relative;box-shadow:0 24px 70px -20px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.08);
+    line-height:0;
+  }
+  canvas#preview{display:block;max-width:100%;max-height:calc(100vh - 190px);height:auto;width:auto}
+  .bleedmark{
+    position:absolute;inset:0;pointer-events:none;
+    outline:1px dashed rgba(255,255,255,.35);outline-offset:-1px;display:none;
+  }
+  .bleedmark.on{display:block}
+
+  @media (max-width:820px){
+    aside{width:100%;flex:1 1 100%;border-right:0;border-bottom:1px solid var(--line)}
+    canvas#preview{max-height:60vh}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dégradé A2 — WheelUp</h1>
+  <span class="meta" id="dims">—</span>
+</header>
+
+<main>
+  <aside>
+    <div class="field">
+      <label>Orientation</label>
+      <div class="seg" id="orient">
+        <button data-v="landscape" aria-pressed="true">Paysage</button>
+        <button data-v="portrait" aria-pressed="false">Portrait</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Résolution</label>
+      <div class="seg" id="dpi">
+        <button data-v="150" aria-pressed="false">150 dpi</button>
+        <button data-v="300" aria-pressed="true">300 dpi</button>
+        <button data-v="600" aria-pressed="false">600 dpi</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Format de fichier</label>
+      <div class="seg" id="fmt">
+        <button data-v="png" aria-pressed="true">PNG</button>
+        <button data-v="jpeg" aria-pressed="false">JPEG</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Impression</label>
+      <div class="row">
+        <input type="checkbox" id="bleed" checked>
+        <label for="bleed">Fond perdu 3 mm</label>
+      </div>
+      <div class="row">
+        <input type="checkbox" id="grain" checked>
+        <label for="grain">Grain fin (anti-banding)</label>
+      </div>
+    </div>
+
+    <button class="go" id="save">Enregistrer l'image</button>
+    <div class="out" id="status"></div>
+
+    <div class="hint">
+      Le fichier contient sa densité (<code>pHYs</code>/JFIF) : il s'ouvre déjà à la
+      bonne taille dans Photoshop, InDesign ou Illustrator. À placer à
+      <strong>100 %</strong>, sans redimensionner.
+    </div>
+  </aside>
+
+  <section class="stage">
+    <div class="frame">
+      <canvas id="preview"></canvas>
+      <div class="bleedmark" id="mark"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ============================================================
+   Définition du dégradé — coordonnées normalisées
+   u = 0 (gauche) → 1 (droite), v = 0 (haut) → 1 (bas)
+   ============================================================ */
+const BASE_TL = '#14132a';
+const BASE_BR = '#1b1731';
+
+// lueurs additives : {x, y, rx, ry, col, i (intensité), p (dureté du fondu)}
+const BLOBS = [
+  {x:0.05, y:0.47, rx:0.60, ry:1.00, col:'#2f3f80', i:0.52, p:1.40}, // grande lueur bleue à gauche
+  {x:0.00, y:0.45, rx:0.28, ry:0.44, col:'#3d4d92', i:0.26, p:1.70}, // cœur bleu
+  {x:0.78, y:0.56, rx:0.46, ry:0.80, col:'#4a2a6c', i:0.44, p:1.45}, // grande lueur violette à droite
+  {x:0.90, y:0.42, rx:0.24, ry:0.40, col:'#5a2f78', i:0.20, p:1.70}, // cœur magenta
+  {x:0.32, y:0.05, rx:0.44, ry:0.50, col:'#1c1b3a', i:0.30, p:1.45}, // respiration haut-gauche
+];
+
+// creux sombres : {x, y, rx, ry, a (force), p}
+const DARKS = [
+  {x:0.44, y:0.10, rx:0.50, ry:0.46, a:0.15, p:1.5}, // haut-centre
+  {x:0.55, y:1.06, rx:0.60, ry:0.46, a:0.17, p:1.4}, // bas-centre
+  {x:0.02, y:1.04, rx:0.42, ry:0.36, a:0.12, p:1.4}, // bas-gauche
+  {x:1.04, y:0.84, rx:0.34, ry:0.55, a:0.14, p:1.4}, // bord droit
+];
+
+const VIGNETTE = 0.22;   // assombrissement des coins
+const GRAIN    = 0.0045; // amplitude du grain (≈ 1.1/255)
+const STOPS    = 64;     // finesse des dégradés radiaux
+
+/* ---------- utilitaires ---------- */
+const smoothstep = w => w*w*(3-2*w);
+const clamp01 = w => w < 0 ? 0 : w > 1 ? 1 : w;
+function hex2rgb(h){h=h.replace('#','');return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+
+/* Ellipse radiale opaque, dessinée en mode `screen` :
+   screen(base, col*w) === 1-(1-base)(1-col*w)  → addition douce, jamais de clipping. */
+function paintBlob(ctx, W, H, b){
+  const [r,g,bl] = hex2rgb(b.col);
+  const rx = b.rx*W, ry = b.ry*H;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.translate(b.x*W, b.y*H);
+  ctx.scale(1, ry/rx);
+  const grd = ctx.createRadialGradient(0,0,0,0,0,rx);
+  for(let s=0;s<=STOPS;s++){
+    const t = s/STOPS;
+    const w = Math.pow(smoothstep(clamp01(1-t)), b.p) * b.i;
+    grd.addColorStop(t, `rgb(${r*w} ${g*w} ${bl*w})`);
+  }
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(0,0,rx,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/* Ellipse d'assombrissement en mode `multiply` : base * (1-w). */
+function paintDark(ctx, W, H, d){
+  const rx = d.rx*W, ry = d.ry*H;
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.translate(d.x*W, d.y*H);
+  ctx.scale(1, ry/rx);
+  const grd = ctx.createRadialGradient(0,0,0,0,0,rx);
+  for(let s=0;s<=STOPS;s++){
+    const t = s/STOPS;
+    const w = Math.pow(smoothstep(clamp01(1-t)), d.p) * d.a;
+    const v = (1-w)*255;
+    grd.addColorStop(t, `rgb(${v} ${v} ${v})`);
+  }
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(0,0,rx,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/* Vignette : assombrit progressivement les bords/coins. */
+function paintVignette(ctx, W, H){
+  const R = Math.max(W,H);
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.translate(W/2, H/2);
+  ctx.scale(1, (H/Math.sqrt(1.35))/(W/Math.sqrt(1.15)));
+  const rx = (W/Math.sqrt(1.15))*0.72*1.55; // r=0.45 → 1.0 dans la formule d'origine
+  const grd = ctx.createRadialGradient(0,0,0,0,0,rx);
+  const r0 = 0.45/1.55;
+  for(let s=0;s<=STOPS;s++){
+    const t = s/STOPS;
+    const w = smoothstep(clamp01((t*1.55-0.45)/0.55)) * VIGNETTE;
+    const v = (1-w)*255;
+    grd.addColorStop(t, `rgb(${v} ${v} ${v})`);
+  }
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(0,0,rx,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/* Grain gaussien léger, appliqué par bandes pour rester économe en mémoire. */
+function addGrain(ctx, W, H){
+  const band = 256;
+  for(let y0=0;y0<H;y0+=band){
+    const h = Math.min(band, H-y0);
+    const img = ctx.getImageData(0,y0,W,h);
+    const d = img.data;
+    for(let i=0;i<d.length;i+=4){
+      // Box-Muller allégé : somme de 3 uniformes ≈ loi normale
+      const n = (Math.random()+Math.random()+Math.random()-1.5) * 2 * GRAIN * 255;
+      d[i]   += n;
+      d[i+1] += n;
+      d[i+2] += n;
+    }
+    ctx.putImageData(img,0,y0);
+  }
+}
+
+/* Rendu complet dans un canvas de W×H pixels. */
+function render(canvas, W, H, withGrain){
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d', {alpha:false, colorSpace:'srgb'});
+  ctx.globalCompositeOperation = 'source-over';
+
+  const base = ctx.createLinearGradient(0,0,W*0.55+0, H*0.45+0);
+  base.addColorStop(0, BASE_TL);
+  base.addColorStop(1, BASE_BR);
+  ctx.fillStyle = base;
+  ctx.fillRect(0,0,W,H);
+
+  for(const b of BLOBS) paintBlob(ctx,W,H,b);
+  for(const d of DARKS) paintDark(ctx,W,H,d);
+  paintVignette(ctx,W,H);
+  if(withGrain) addGrain(ctx,W,H);
+  return canvas;
+}
+
+/* ============================================================
+   Métadonnées de densité (pour que le fichier s'ouvre en A2)
+   ============================================================ */
+const CRC_TABLE = (()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(bytes){let c=0xFFFFFFFF;for(let i=0;i<bytes.length;i++)c=CRC_TABLE[(c^bytes[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+
+/* Insère un chunk pHYs (pixels par mètre) juste après l'IHDR du PNG. */
+function pngSetDpi(buf, dpi){
+  const u8 = new Uint8Array(buf);
+  const ppm = Math.round(dpi/0.0254);
+  const chunk = new Uint8Array(21);
+  const dv = new DataView(chunk.buffer);
+  dv.setUint32(0, 9);                                    // longueur des données
+  chunk.set([0x70,0x48,0x59,0x73], 4);                   // 'pHYs'
+  dv.setUint32(8, ppm); dv.setUint32(12, ppm);           // X/Y pixels par metre
+  chunk[16] = 1;                                         // unite = metre
+  dv.setUint32(17, crc32(chunk.subarray(4,17)));
+  const at = 8 + 25;                                     // signature + IHDR complet
+  const out = new Uint8Array(u8.length + chunk.length);
+  out.set(u8.subarray(0,at), 0);
+  out.set(chunk, at);
+  out.set(u8.subarray(at), at + chunk.length);
+  return out;
+}
+
+/* Réécrit la densité dans l'en-tête JFIF du JPEG. */
+function jpegSetDpi(buf, dpi){
+  const u8 = new Uint8Array(buf);
+  if(u8[2]===0xFF && u8[3]===0xE0){
+    u8[13] = 1;                                          // unites = pouce
+    u8[14] = dpi>>8; u8[15] = dpi & 0xFF;                // densite X
+    u8[16] = dpi>>8; u8[17] = dpi & 0xFF;                // densite Y
+  }
+  return u8;
+}
+
+/* ============================================================
+   Interface
+   ============================================================ */
+const A2_SHORT = 420, A2_LONG = 594;                     // millimetres
+const state = {orient:'landscape', dpi:300, fmt:'png', bleed:true, grain:true};
+const $ = id => document.getElementById(id);
+const mm2px = (mm,dpi) => Math.round(mm/25.4*dpi);
+
+function sizeMm(){
+  const b = state.bleed ? 3 : 0;
+  const w = (state.orient==='landscape' ? A2_LONG : A2_SHORT) + 2*b;
+  const h = (state.orient==='landscape' ? A2_SHORT : A2_LONG) + 2*b;
+  return [w,h];
+}
+function sizePx(){
+  const [w,h] = sizeMm();
+  return [mm2px(w,state.dpi), mm2px(h,state.dpi)];
+}
+
+function refresh(){
+  const [mw,mh] = sizeMm(), [pw,ph] = sizePx();
+  $('dims').textContent =
+    `A2 ${state.orient==='landscape'?'paysage':'portrait'} · ${mw}×${mh} mm · ${pw.toLocaleString('fr-FR')}×${ph.toLocaleString('fr-FR')} px · ${state.dpi} dpi`;
+  $('mark').classList.toggle('on', state.bleed);
+
+  // apercu leger, meme formule mais en petit
+  const long = 1500;
+  const [w,h] = state.orient==='landscape' ? [long, Math.round(long*mh/mw)]
+                                           : [Math.round(long*mw/mh), long];
+  render($('preview'), w, h, state.grain);
+}
+
+function bindSeg(id, key, cast = v=>v){
+  $(id).addEventListener('click', e=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    [...$(id).children].forEach(b => b.setAttribute('aria-pressed', String(b===btn)));
+    state[key] = cast(btn.dataset.v);
+    refresh();
+  });
+}
+bindSeg('orient','orient');
+bindSeg('dpi','dpi',Number);
+bindSeg('fmt','fmt');
+$('bleed').addEventListener('change', e=>{state.bleed = e.target.checked; refresh();});
+$('grain').addEventListener('change', e=>{state.grain = e.target.checked; refresh();});
+
+$('save').addEventListener('click', async ()=>{
+  const btn = $('save'), st = $('status');
+  const [pw,ph] = sizePx();
+  btn.disabled = true;
+  btn.textContent = 'Rendu…';
+  st.textContent = `${pw.toLocaleString('fr-FR')}×${ph.toLocaleString('fr-FR')} px — cela peut prendre un moment.`;
+  await new Promise(r=>setTimeout(r,40));
+
+  try{
+    const c = document.createElement('canvas');
+    render(c, pw, ph, state.grain);
+
+    btn.textContent = 'Encodage…';
+    await new Promise(r=>setTimeout(r,40));
+
+    const type = state.fmt==='png' ? 'image/png' : 'image/jpeg';
+    const blob = await new Promise((res,rej)=>
+      c.toBlob(b => b ? res(b) : rej(new Error('encodage impossible')), type, 0.97));
+
+    const raw = await blob.arrayBuffer();
+    const fixed = state.fmt==='png' ? pngSetDpi(raw, state.dpi) : jpegSetDpi(raw, state.dpi);
+    const out = new Blob([fixed], {type});
+
+    const name = `WheelUp-A2-${state.orient==='landscape'?'paysage':'portrait'}`
+               + `-${state.dpi}dpi${state.bleed?'-fondperdu3mm':''}.${state.fmt==='png'?'png':'jpg'}`;
+    const url = URL.createObjectURL(out);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+
+    st.textContent = `${name} — ${(out.size/1048576).toFixed(1)} Mo`;
+  }catch(err){
+    st.textContent = 'Échec : ' + err.message + ' — essayez 300 dpi ou le format JPEG.';
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Enregistrer l'image";
+  }
+});
+
+refresh();
+</script>
+</body>
+</html>
