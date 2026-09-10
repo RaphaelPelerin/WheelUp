@@ -163251,6 +163251,8 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   bikePrefab: {fileID: 2198236148893643018, guid: 4bb17f466c1f44f898b048ee1c43ea6d, type: 3}
   visualPivot: {fileID: 900012}
+  riderPrefab: {fileID: 919132149155446097, guid: c723a1d888b9eb241a23f91826965e02, type: 3}
+  riderAnimator: {fileID: 9100000, guid: 25eec9e285139d042a731b89a571d22a, type: 2}
 --- !u!1 &900011
 GameObject:
   m_ObjectHideFlags: 0
@@ -163499,3 +163501,48 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier:
   logResult: 1
+--- !u!1 &900101
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 900102}
+  - component: {fileID: 900103}
+  m_Layer: 0
+  m_Name: TimeOfDay
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &900102
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 900101}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &900103
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 900101}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0ae5a500f26d4caf97f6d686c7f4bcc3, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  daySkybox: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}

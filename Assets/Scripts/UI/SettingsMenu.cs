@@ -75,7 +75,7 @@ namespace WheelingMoto.UI
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -56), new Vector2(-22, -16));
 
             UIFactory.AddText(right.transform, "ControlsInfo",
-                "Contrôles tactiles :\n• ◀ / ▶ (bas gauche) : diriger\n• GAZ / FREIN (bas droite) : accélérer / freiner\n• CABRER (bas droite) : lever la roue avant",
+                "Contrôles tactiles :\n• ◀ / ▶ : diriger\n• GAZ : accélérer\n• LEVER : accélérer et lever la roue avant\n• FREIN : freiner, puis reculer à l'arrêt\n• Glisser l'écran : tourner la caméra · VUE : changer de vue",
                 16, theme.TextMuted, TextAnchor.UpperLeft,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -220), new Vector2(-22, -76));
 

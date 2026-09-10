@@ -14,9 +14,12 @@ namespace WheelingMoto.UI
         UITheme theme;
         GameMode selectedMode;
         MapId selectedMap;
+        TimeOfDay selectedTime;
 
         Button defisButton;
         Button courseButton;
+        Button dayButton;
+        Button nightButton;
         readonly Dictionary<MapId, Button> mapButtons = new Dictionary<MapId, Button>();
 
         public void Build(Transform parent, UITheme t)
@@ -24,6 +27,7 @@ namespace WheelingMoto.UI
             theme = t;
             selectedMode = GameSession.SelectedMode;
             selectedMap = GameSession.SelectedMap;
+            selectedTime = GameSession.SelectedTime;
 
             var panel = UIFactory.AddPanel(parent, "PlayPanel", Color.clear, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             Root = panel.gameObject;
@@ -65,6 +69,15 @@ namespace WheelingMoto.UI
                 mapButtons[map.Id] = card;
             }
 
+            UIFactory.AddText(Root.transform, "TimeLabel", "Moment de la journée", 16, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0f, 0f), new Vector2(0.5f, 0f), new Vector2(30, 100), new Vector2(-10, 124));
+
+            dayButton = UIFactory.AddButton(Root.transform, "DayButton", "JOUR", theme.PanelAlt, theme.Text, 20,
+                new Vector2(0f, 0f), new Vector2(0.25f, 0f), new Vector2(30, 20), new Vector2(-6, 94), () => SelectTime(TimeOfDay.Jour));
+
+            nightButton = UIFactory.AddButton(Root.transform, "NightButton", "NUIT", theme.PanelAlt, theme.Text, 20,
+                new Vector2(0.25f, 0f), new Vector2(0.5f, 0f), new Vector2(6, 20), new Vector2(-10, 94), () => SelectTime(TimeOfDay.Nuit));
+
             UIFactory.AddButton(Root.transform, "PlayButton", "JOUER", theme.Accent, Color.white, 26,
                 new Vector2(0.5f, 0f), new Vector2(1f, 0f), new Vector2(10, 20), new Vector2(-30, 110), OnPlayPressed);
 
@@ -75,6 +88,7 @@ namespace WheelingMoto.UI
         {
             selectedMode = GameSession.SelectedMode;
             selectedMap = GameSession.SelectedMap;
+            selectedTime = GameSession.SelectedTime;
             RefreshSelectionVisuals();
         }
 
@@ -82,6 +96,13 @@ namespace WheelingMoto.UI
         {
             selectedMode = mode;
             GameSession.SelectedMode = mode;
+            RefreshSelectionVisuals();
+        }
+
+        void SelectTime(TimeOfDay time)
+        {
+            selectedTime = time;
+            GameSession.SelectedTime = time;
             RefreshSelectionVisuals();
         }
 
@@ -96,6 +117,8 @@ namespace WheelingMoto.UI
         {
             UIFactory.SetButtonColor(defisButton, selectedMode == GameMode.Defis ? theme.Accent : theme.PanelAlt);
             UIFactory.SetButtonColor(courseButton, selectedMode == GameMode.Course ? theme.Accent : theme.PanelAlt);
+            UIFactory.SetButtonColor(dayButton, selectedTime == TimeOfDay.Jour ? theme.Accent : theme.PanelAlt);
+            UIFactory.SetButtonColor(nightButton, selectedTime == TimeOfDay.Nuit ? theme.Accent : theme.PanelAlt);
 
             foreach (var kv in mapButtons)
             {

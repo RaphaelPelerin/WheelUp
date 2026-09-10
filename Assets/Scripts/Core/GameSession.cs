@@ -14,10 +14,17 @@ namespace WheelingMoto.Core
         CoteAzur
     }
 
+    public enum TimeOfDay
+    {
+        Jour,
+        Nuit
+    }
+
     /// <summary>Choix du joueur dans le menu Jouer, conservés le temps de la session pour la scène de jeu.</summary>
     public static class GameSession
     {
         public static GameMode SelectedMode = GameMode.Course;
         public static MapId SelectedMap = MapId.Metropole;
+        public static TimeOfDay SelectedTime = TimeOfDay.Jour;
     }
 }
