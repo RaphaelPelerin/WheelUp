@@ -14,8 +14,8 @@ namespace WheelingMoto.Gameplay
     /// - les doigts, refermés sur les poignées ; index et majeur droits posés sur le levier de frein,
     ///   qu'ils tirent au freinage.
     /// Le pilote est calé au démarrage : bassin sur la selle, puis avancé si ses bras n'atteignent pas le guidon.
-    /// Les yeux de la vue 1re personne sont alors placés juste devant sa poitrine et ancrés à son buste :
-    /// la caméra suit ses mouvements sans jamais entrer dans le corps. La tête est masquée dans cette vue.
+    /// La vue 1re personne se fait depuis ses yeux, ancrés à son cou : la caméra suit ses mouvements sans jamais
+    /// entrer dans le corps. La tête est masquée dans cette vue.
     /// </summary>
     [DefaultExecutionOrder(100)] // Après MotorcycleController, qui pose guidon et levier en LateUpdate.
     public class MotoRider : MonoBehaviour
@@ -25,12 +25,14 @@ namespace WheelingMoto.Gameplay
         public float hipHeightAboveSeat = 0.1f;
         [Tooltip("Avancée maximale sur la selle si les bras n'atteignent pas le guidon.")]
         public float maxReachShift = 0.2f;
-        [Tooltip("Distance entre la poitrine et les yeux de la vue 1re personne.")]
-        public float eyeClearance = 0.06f;
+        [Tooltip("Yeux de la vue 1re personne par rapport à l'articulation de la tête : côté (x), haut (y), avant (z).")]
+        public Vector3 eyeOffsetFromHead = new Vector3(0f, 0.08f, 0.1f);
 
         [Header("Vie du buste")]
         [Tooltip("Part du cabrage que le buste compense en se penchant vers l'avant (0 = collé à la moto, 1 = reste vertical).")]
         public float wheelieBodyLean = 0.5f;
+        [Tooltip("Roue avant : part du basculement que le buste compense en se jetant en arrière.")]
+        public float stoppieBodyLean = 0.6f;
         [Tooltip("Poids jeté vers l'avant quand la roue monte vite : degrés de buste par degré/s de cabrage.")]
         public float balanceReaction = 0.12f;
         public float maxBalanceReaction = 12f;
@@ -74,11 +76,6 @@ namespace WheelingMoto.Gameplay
         const float GripInsetFromEnd = 0.06f;
         const int CalibrationFrames = 3;
         const float HiddenHeadScale = 0.001f;
-        // Zone sondée devant les yeux pour trouver la poitrine : assez étroite pour exclure bras et cuisses.
-        const float ChestProbeHalfWidth = 0.12f;
-        const float ChestProbeBelow = 0.2f;
-        const float ChestProbeAbove = 0.12f;
-        const float ChestProbeReach = 0.4f;
 
         enum Finger { Thumb, Index, Middle, Ring, Little }
 
@@ -110,7 +107,7 @@ namespace WheelingMoto.Gameplay
         float bodyPitch, bodyPitchVelocity;
         float bodyRoll, bodyRollVelocity;
 
-        // Yeux de la vue 1re personne, ancrés au haut du buste.
+        // Yeux de la vue 1re personne, ancrés au cou.
         Transform eyeAnchor;
         Vector3 eyeInAnchor;
 
@@ -168,7 +165,6 @@ namespace WheelingMoto.Gameplay
                 if (bones[i] == null) continue;
                 spineBones[k] = bones[i];
                 spineWeights[k] = shares[i] / total;
-                eyeAnchor = bones[i]; // la plus haute trouvée
                 k++;
             }
         }
@@ -292,58 +288,41 @@ namespace WheelingMoto.Gameplay
         }
 
         /// <summary>
-        /// Yeux de la vue 1re personne : à la hauteur réglée sur la moto, avancés juste devant la poitrine
-        /// (mesurée sur le maillage posé), puis ancrés au haut du buste pour en suivre les mouvements.
+        /// Yeux de la vue 1re personne : ceux du pilote, relevés sur sa tête posée, puis ancrés à son cou pour
+        /// suivre ses mouvements (le cou n'est pas réduit comme la tête masquée). La caméra, au-dessus du buste,
+        /// ne croise jamais le corps ; on voit ses bras et ses mains sur le guidon.
         /// </summary>
         void AnchorEyes(Transform frame)
         {
-            if (eyeAnchor == null) return;
+            eyeAnchor = neck != null ? neck : head != null ? head.parent : null;
+            if (head == null || eyeAnchor == null) return;
 
-            Vector3 eye = bike.DefaultEyePosition();
-            float defaultZ = eye.z;
-            float chestFront = MeasureChestFront(frame, eye);
-            if (chestFront > float.NegativeInfinity)
-            {
-                eye.z = Mathf.Max(eye.z, chestFront + eyeClearance);
-            }
-            eyeInAnchor = eyeAnchor.InverseTransformPoint(frame.TransformPoint(eye));
-            Debug.Log($"[MotoRider] Vue 1re personne : yeux à {eye.y:0.00} m, avancés de {(eye.z - defaultZ) * 100f:0} cm pour rester devant la poitrine.", this);
-        }
+            Vector3 eye = head.position
+                + frame.right * eyeOffsetFromHead.x + frame.up * eyeOffsetFromHead.y + frame.forward * eyeOffsetFromHead.z;
+            eyeInAnchor = eyeAnchor.InverseTransformPoint(eye);
 
-        /// <summary>Avant de la poitrine, dans l'espace du pivot : sommet le plus avancé du corps autour des yeux.</summary>
-        float MeasureChestFront(Transform frame, Vector3 eye)
-        {
-            float front = float.NegativeInfinity;
-            var baked = new Mesh();
-            foreach (SkinnedMeshRenderer skin in GetComponentsInChildren<SkinnedMeshRenderer>())
-            {
-                skin.BakeMesh(baked, true);
-                Transform t = skin.transform;
-                foreach (Vector3 v in baked.vertices)
-                {
-                    Vector3 p = frame.InverseTransformPoint(t.position + t.rotation * v);
-                    if (Mathf.Abs(p.x - eye.x) > ChestProbeHalfWidth) continue;
-                    if (p.y < eye.y - ChestProbeBelow || p.y > eye.y + ChestProbeAbove) continue;
-                    if (p.z > eye.z + ChestProbeReach) continue;
-                    front = Mathf.Max(front, p.z);
-                }
-            }
-            Destroy(baked);
-            return front;
+            Vector3 eyeLocal = frame.InverseTransformPoint(eye);
+            Vector3 gripsLocal = frame.InverseTransformPoint(
+                bike.HandlebarPart.TransformPoint((leftArm.gripLocal + rightArm.gripLocal) * 0.5f));
+            Debug.Log($"[MotoRider] Vue 1re personne depuis la tête du pilote : yeux à {eyeLocal.y:0.00} m, " +
+                $"poignées {(gripsLocal.z - eyeLocal.z) * 100f:0} cm devant et {(eyeLocal.y - gripsLocal.y) * 100f:0} cm plus bas.", this);
         }
 
         /// <summary>Buste et tête qui réagissent au wheeling, au freinage et aux virages.</summary>
         void PoseBody(Transform frame, float dt)
         {
             float wheelie = bike.WheelieAngle;
+            float stoppie = bike.StoppieAngle;
             float lift = bike.FrontWheelLift;
+            float rearLift = bike.RearWheelLift;
             float critical = Mathf.InverseLerp(bike.wheelieSweetMax, bike.wheelieFallAngle, wheelie);
             float balance = Mathf.Clamp(bike.WheelieAngularVelocity * balanceReaction, -maxBalanceReaction, maxBalanceReaction);
 
             float targetPitch = wheelie * wheelieBodyLean
                 + balance * lift
                 + criticalLean * critical
-                + forkDip * Mathf.Max(0f, bike.ForkCompression);
+                + forkDip * Mathf.Max(0f, bike.ForkCompression) * (1f - rearLift)
+                - stoppie * stoppieBodyLean;
             float targetRoll = bike.SteerInput * Mathf.Lerp(turnLeanGround, turnLeanWheelie, lift);
 
             if (dt > 0f)
@@ -361,7 +340,8 @@ namespace WheelingMoto.Gameplay
             }
 
             // La tête rattrape le cabrage que le buste n'a pas compensé : les yeux restent sur l'horizon.
-            float headPitch = Mathf.Clamp(wheelie - bodyPitch, -15f, 40f) * headCompensation;
+            // Assiette de la moto : cabrée en wheeling, plongeante sur la roue avant.
+            float headPitch = Mathf.Clamp(wheelie - stoppie - bodyPitch, -40f, 40f) * headCompensation;
             Quaternion nod = Quaternion.AngleAxis(headPitch * 0.5f, right);
             if (neck != null) neck.rotation = nod * neck.rotation;
             if (head != null) head.rotation = nod * head.rotation;

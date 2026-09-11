@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using WheelingMoto.Core;
 
 namespace WheelingMoto.UI
@@ -20,6 +21,8 @@ namespace WheelingMoto.UI
         StepperWidget masterStepper;
         StepperWidget musicStepper;
         StepperWidget sfxStepper;
+        Button arrowsButton;
+        Button joystickButton;
 
         TextMeshProUGUI adsStateText;
 
@@ -73,20 +76,30 @@ namespace WheelingMoto.UI
             UIFactory.AddText(right.transform, "SectionTitle", "Contrôles", 22, theme.Text, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -56), new Vector2(-22, -16));
 
+            UIFactory.AddText(right.transform, "SteeringLabel", "Direction", 17, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -100), new Vector2(-22, -76));
+            arrowsButton = UIFactory.AddButton(right.transform, "ArrowsButton", "FLÈCHES", theme.PanelAlt, theme.Text, 18,
+                new Vector2(0, 1), new Vector2(0.5f, 1), new Vector2(22, -156), new Vector2(-6, -108),
+                () => SelectSteering(SteeringControl.Fleches));
+            joystickButton = UIFactory.AddButton(right.transform, "JoystickButton", "JOYSTICK", theme.PanelAlt, theme.Text, 18,
+                new Vector2(0.5f, 1), new Vector2(1, 1), new Vector2(6, -156), new Vector2(-22, -108),
+                () => SelectSteering(SteeringControl.Joystick));
+
             UIFactory.AddText(right.transform, "ControlsInfo",
-                "Contrôles tactiles :\n• ◀ / ▶ : diriger\n• GAZ : accélérer\n• LEVER : accélérer et lever la roue avant\n• FREIN : freiner, puis reculer à l'arrêt\n• Glisser l'écran : tourner la caméra · VUE : changer de vue",
+                "Contrôles tactiles :\n• ◀ / ▶ ou joystick : diriger (lâché, le joystick revient au milieu)\n• GAZ : accélérer\n• LEVER : accélérer et lever la roue avant\n• FREIN : freiner ; fort en roulant vite, il lève l'arrière (roue avant) ; recule à l'arrêt\n• Glisser l'écran : tourner la caméra · VUE : changer de vue",
                 16, theme.TextMuted, TextAnchor.UpperLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -220), new Vector2(-22, -76));
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -340), new Vector2(-22, -176));
 
             // Les achats ont quitté cet écran pour l'onglet Boutique : ils y côtoient les lots de
             // pièces, sous la même bannière que les coffres.
             adsStateText = UIFactory.AddText(right.transform, "AdsState", "", 15, theme.TextMuted, TextAnchor.UpperLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -288), new Vector2(-22, -240));
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -408), new Vector2(-22, -360));
 
             UpdateQualityLabel();
             UpdateMasterLabel();
             UpdateMusicLabel();
             UpdateSfxLabel();
+            RefreshSteeringButtons();
             RefreshAdsState();
         }
 
@@ -135,6 +148,19 @@ namespace WheelingMoto.UI
         }
 
         void UpdateSfxLabel() => sfxStepper.Label.text = $"{Mathf.RoundToInt(sfxVol * 100)}%";
+
+        void SelectSteering(SteeringControl control)
+        {
+            SettingsManager.Steering = control;
+            RefreshSteeringButtons();
+        }
+
+        void RefreshSteeringButtons()
+        {
+            bool joystick = SettingsManager.Steering == SteeringControl.Joystick;
+            UIFactory.SetButtonColor(arrowsButton, joystick ? theme.PanelAlt : theme.Accent);
+            UIFactory.SetButtonColor(joystickButton, joystick ? theme.Accent : theme.PanelAlt);
+        }
 
         void RefreshAdsState()
         {

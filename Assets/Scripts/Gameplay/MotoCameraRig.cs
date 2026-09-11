@@ -234,7 +234,8 @@ namespace WheelingMoto.Gameplay
                 freeLookPitch = Mathf.Lerp(freeLookPitch, 0f, k);
             }
 
-            float wheelie = bike != null ? bike.WheelieAngle : 0f;
+            // Assiette de la moto : positive en wheeling, négative sur la roue avant (le regard plonge un peu).
+            float wheelie = bike != null ? bike.WheelieAngle - bike.StoppieAngle : 0f;
             float lean = bike != null ? bike.LeanAngle : 0f;
             float headDown = bike != null ? bike.firstPersonHeadPitch : 0f;
 

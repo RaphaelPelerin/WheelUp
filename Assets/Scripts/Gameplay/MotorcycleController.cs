@@ -21,13 +21,17 @@ namespace WheelingMoto.Gameplay
     /// collisions avec le décor et gravité, sans l'instabilité d'une vraie physique deux-roues.
     ///
     /// Commandes : GAZ accélère seulement ; LEVER accélère aussi et lève la roue avant ;
-    /// FREIN freine, rabat la roue avant en wheeling, et fait reculer une fois à l'arrêt.
+    /// FREIN freine, rabat la roue avant en wheeling, lève l'arrière s'il est tenu fort à bonne vitesse,
+    /// et fait reculer une fois à l'arrêt.
     ///
-    /// Deux mécaniques sont simulées à part, sur le pivot visuel :
+    /// Trois mécaniques sont simulées à part, sur le pivot visuel :
     /// - le wheeling, autour du point de contact du pneu arrière, en trois zones : sous la zone
     ///   d'équilibre la gravité rabat la roue ; dans la zone elle ne dérive que faiblement, mais les
     ///   bosses de la route perturbent l'angle en permanence (tenue au dosage LEVER / FREIN) ;
     ///   au-delà, la moto part en arrière et seul le frein la rattrape ;
+    /// - la roue avant (stoppie), autour du contact du pneu avant, sur le même principe : FREIN lève
+    ///   l'arrière, le relâcher le repose ; au-delà de la zone d'équilibre rien ne rattrape la moto,
+    ///   elle passe par-dessus la roue avant ;
     /// - la direction, qui passe par l'inclinaison (lean), prise progressivement (ressort amorti,
     ///   plus lent à haute vitesse) et limitée à basse vitesse ; le virage découle de l'angle pris via
     ///   w = g*tan(lean)/v, et le guidon affiche le braquage correspondant, avec contre-braquage.
@@ -48,6 +52,16 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Position avant/arrière de l'axe de la roue arrière dans le modèle : pivot du wheeling.")]
         public float rearContactZ = -0.44f;
 
+        [Header("Départ")]
+        [Tooltip("Point de départ de la moto (position et direction). Vide : la moto part de là où MotoRoot est posé dans la scène.")]
+        public Transform spawnPoint;
+        [Tooltip("Cherche au démarrage le milieu d'une route droite près du point de départ, et s'y aligne.")]
+        public bool spawnOnRoad = true;
+        [Tooltip("Mot présent dans le nom des matériaux de chaussée (Demo City : asphalt_2_tracks, asphalt_4_tracks...).")]
+        public string roadMaterialKeyword = "tracks";
+        [Tooltip("Rayon de recherche d'une route autour du point de départ, en mètres.")]
+        public float roadSearchRadius = 150f;
+
         [Header("Pilote (vue 1re personne)")]
         [Tooltip("Place les yeux automatiquement à partir de la selle du modèle. Décoché : firstPersonEyeOffset est utilisé tel quel.")]
         public bool autoFirstPersonEye = true;
@@ -62,7 +76,7 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Position manuelle des yeux par rapport à MotoRoot : utilisée si le calcul automatique est désactivé ou si aucune selle n'est trouvée.")]
         public Vector3 firstPersonEyeOffset = new Vector3(0f, 1.45f, -0.12f);
         [Tooltip("Regard vers la route roue au sol, en degrés vers le bas. Plus faible = vue plus droite, qui plonge moins sur la moto.")]
-        public float firstPersonHeadPitch = 8f;
+        public float firstPersonHeadPitch = 12f;
 
         [Header("Pilote (personnage)")]
         [Tooltip("Modèle humanoïde du pilote (SKM_Mannequin du pack MotoInteractionAnims). Vide : pas de pilote.")]
@@ -180,6 +194,32 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Fréquence des bosses, en Hz.")]
         public float wheelieBumpFrequency = 1.7f;
 
+        [Header("Roue avant (stoppie)")]
+        [Tooltip("Vitesse (m/s) sous laquelle FREIN ne tient plus l'arrière levé : il retombe.")]
+        public float stoppieMinSpeed = 4f;
+        [Tooltip("Début de la zone d'équilibre sur la roue avant, en degrés.")]
+        public float stoppieSweetMin = 16f;
+        [Tooltip("Fin de la zone d'équilibre : au-delà, la moto passe par-dessus la roue avant, rien ne la rattrape.")]
+        public float stoppieSweetMax = 24f;
+        [Tooltip("Angle de chute vers l'avant.")]
+        public float stoppieFallAngle = 45f;
+        [Tooltip("Levée de l'arrière par FREIN à pleine vitesse, en degrés/s² : proportionnelle à la vitesse, il faut freiner fort en roulant vite.")]
+        public float stoppieLiftTorque = 300f;
+        [Tooltip("Levée par FREIN une fois dans la zone d'équilibre : modérée, pour pouvoir doser.")]
+        public float stoppieHoldTorque = 40f;
+        [Tooltip("Retour de l'arrière vers le sol quand on relâche FREIN.")]
+        public float stoppieReleaseTorque = 120f;
+        [Tooltip("Rappel vers le sol sous la zone d'équilibre.")]
+        public float stoppieLowPull = 110f;
+        [Tooltip("Dérive aux bords de la zone d'équilibre (nulle en son centre).")]
+        public float stoppieDrift = 30f;
+        [Tooltip("Bascule vers l'avant au-delà de la zone d'équilibre, jusqu'à la chute.")]
+        public float stoppieCriticalPush = 220f;
+        [Tooltip("Décélération sur la roue avant, frein tenu : plus douce qu'au sol, pour laisser le temps de doser.")]
+        public float stoppieBrakeDeceleration = 3f;
+        [Tooltip("Autorité de direction conservée roue arrière en l'air.")]
+        public float stoppieSteerAuthority = 0.4f;
+
         [Header("Chute et respawn")]
         [Tooltip("Durée du basculement visible avant la remise à plat.")]
         public float fallAnimationTime = 0.3f;
@@ -198,6 +238,7 @@ namespace WheelingMoto.Gameplay
         const float BumpNoiseSeed = 7.31f;
         const float HandlebarMaxRate = 300f;
         const float ThrottleRate = 5f;
+        const float StoppieLiftFadeAngle = 6f;
 
         CharacterController body;
         Transform riderHead;
@@ -223,7 +264,11 @@ namespace WheelingMoto.Gameplay
         float handlebarVelocity;
         float wheelieAngle;
         float wheelieAngularVelocity;
+        float stoppieAngle;
+        float stoppieAngularVelocity;
+        Vector3 pivotRestPosition;
         bool isFallen;
+        bool fallForward;
         float fallTimer;
         // Après un respawn, LEVER doit être relâché : sinon un bouton resté enfoncé relancerait la chute.
         bool wheelieNeedsRelease;
@@ -244,6 +289,12 @@ namespace WheelingMoto.Gameplay
         /// <summary>Vitesse en m/s, négative en marche arrière.</summary>
         public float SignedSpeed => currentSpeed;
         public float WheelieAngle => wheelieAngle;
+        /// <summary>Basculement sur la roue avant, en degrés (0 : roue arrière au sol).</summary>
+        public float StoppieAngle => stoppieAngle;
+        /// <summary>Vrai si la dernière chute est partie vers l'avant, par-dessus la roue avant.</summary>
+        public bool LastFallForward => fallForward;
+        /// <summary>Part de la roue arrière en l'air, de 0 à 1.</summary>
+        internal float RearWheelLift => RearWheelUp();
         public float LeanAngle => currentLean;
         /// <summary>Tête du pilote : suit le cabrage et l'inclinaison de la moto.</summary>
         public Transform RiderHead => riderHead;
@@ -271,9 +322,21 @@ namespace WheelingMoto.Gameplay
         {
             get
             {
-                if (isFallen || wheelieAngle > wheelieSweetMax) return WheelieZone.Critical;
+                if ((isFallen && !fallForward) || wheelieAngle > wheelieSweetMax) return WheelieZone.Critical;
                 if (wheelieAngle >= wheelieSweetMin) return WheelieZone.Balance;
                 if (wheelieAngle >= 1f) return WheelieZone.Rising;
+                return WheelieZone.Flat;
+            }
+        }
+
+        /// <summary>Position de la moto sur la roue avant, mêmes zones que le wheeling.</summary>
+        public WheelieZone CurrentStoppieZone
+        {
+            get
+            {
+                if ((isFallen && fallForward) || stoppieAngle > stoppieSweetMax) return WheelieZone.Critical;
+                if (stoppieAngle >= stoppieSweetMin) return WheelieZone.Balance;
+                if (stoppieAngle >= 1f) return WheelieZone.Rising;
                 return WheelieZone.Flat;
             }
         }
@@ -295,6 +358,13 @@ namespace WheelingMoto.Gameplay
 
         void Awake()
         {
+            // En tout premier : la caméra et le calage au sol (Start) partent ainsi de la bonne position.
+            if (spawnPoint != null)
+            {
+                // Seule la direction est reprise : la moto démarre droite, SnapToGround la pose ensuite sur le sol.
+                transform.SetPositionAndRotation(spawnPoint.position, Quaternion.Euler(0f, spawnPoint.eulerAngles.y, 0f));
+            }
+
             if (!TryGetComponent(out body))
             {
                 body = gameObject.AddComponent<CharacterController>();
@@ -310,7 +380,8 @@ namespace WheelingMoto.Gameplay
             {
                 // Pivot du wheeling posé sur le contact du pneu arrière. Le CharacterController flotte
                 // de sa skin width au-dessus du sol : on la retranche pour que les pneus touchent la route.
-                visualPivot.localPosition = new Vector3(0f, -body.skinWidth, rearContactZ);
+                pivotRestPosition = new Vector3(0f, -body.skinWidth, rearContactZ);
+                visualPivot.localPosition = pivotRestPosition;
                 visualPivot.localRotation = Quaternion.identity;
 
                 GameObject prefab = bikePrefab != null ? bikePrefab : LoadCatalogModel();
@@ -476,7 +547,26 @@ namespace WheelingMoto.Gameplay
 
         void Start()
         {
-            SnapToGround();
+            if (!spawnOnRoad || !TryPlaceOnRoad()) SnapToGround();
+        }
+
+        /// <summary>Départ au milieu d'une route droite proche, dans le sens de la plus longue ligne droite.</summary>
+        bool TryPlaceOnRoad()
+        {
+            // Les colliders de la ville viennent d'être créés (CityColliderBaker, en Awake) : synchronisés avant de sonder.
+            Physics.SyncTransforms();
+            if (!RoadSpawnFinder.TryFind(transform.position, roadMaterialKeyword, roadSearchRadius, body, out RoadSpawn spawn))
+            {
+                Debug.LogWarning("[MotorcycleController] Aucune route trouvée autour du point de départ : départ sur place.", this);
+                return false;
+            }
+
+            body.enabled = false;
+            transform.SetPositionAndRotation(spawn.Position + Vector3.up * 0.05f, Quaternion.Euler(0f, spawn.Yaw, 0f));
+            body.enabled = true;
+            Debug.Log($"[MotorcycleController] Départ au milieu de la route : chaussée de {spawn.Width:0} m, " +
+                $"{spawn.StraightLength:0} m de ligne droite devant.", this);
+            return true;
         }
 
         public void SetThrottle(bool held) => touchThrottle = held;
@@ -497,6 +587,7 @@ namespace WheelingMoto.Gameplay
 
             UpdateSpeed(dt);
             UpdateWheelie(dt);
+            if (!isFallen) UpdateStoppie(dt);
             if (isFallen) return;
 
             UpdateSteering(dt);
@@ -550,10 +641,12 @@ namespace WheelingMoto.Gameplay
                 if (currentSpeed > 0.05f)
                 {
                     // Roue avant en l'air : seul le frein arrière porte, le freinage est bien plus faible.
+                    // Sur la roue avant, il est adouci pour laisser le temps de doser l'équilibre.
                     float strength = brakingDeceleration * (wheelieAngle > 1f ? brakeFactorDuringWheelie : 1f);
+                    strength = Mathf.Lerp(strength, stoppieBrakeDeceleration, RearWheelUp());
                     currentSpeed = Mathf.MoveTowards(currentSpeed, 0f, strength * dt);
                 }
-                else if (wheelieAngle < 1f)
+                else if (wheelieAngle < 1f && stoppieAngle < 1f)
                 {
                     // À l'arrêt, maintenir le frein fait reculer lentement.
                     currentSpeed = Mathf.MoveTowards(currentSpeed, -reverseMaxSpeed, reverseAcceleration * dt);
@@ -584,7 +677,7 @@ namespace WheelingMoto.Gameplay
                 torque += WheelieBumpTorque();
             }
 
-            if (Lift && !wheelieNeedsRelease && fastEnough)
+            if (Lift && !wheelieNeedsRelease && fastEnough && stoppieAngle <= 0f)
             {
                 torque += WheelieLiftTorqueAt(wheelieAngle);
             }
@@ -626,7 +719,7 @@ namespace WheelingMoto.Gameplay
 
             if (wheelieAngle >= wheelieFallAngle)
             {
-                TriggerFall();
+                TriggerFall(false);
             }
         }
 
@@ -669,6 +762,73 @@ namespace WheelingMoto.Gameplay
         }
 
         /// <summary>
+        /// Roue avant (stoppie), sur le modèle du wheeling. FREIN tenu à bonne vitesse bascule la moto vers
+        /// l'avant, d'autant plus fort qu'elle roule vite, puis tient modérément une fois dans la zone
+        /// d'équilibre ; le relâcher repose l'arrière. Les bosses perturbent l'angle, et trop lente, la moto
+        /// ne tient plus : l'arrière retombe. Au-delà de la zone d'équilibre, rien ne la rattrape.
+        /// </summary>
+        void UpdateStoppie(float dt)
+        {
+            float torque;
+            if (stoppieAngle > stoppieSweetMax)
+            {
+                // Passé le point d'équilibre, aucune commande n'agit : la moto passe par-dessus la roue avant.
+                float over = Mathf.InverseLerp(stoppieSweetMax, stoppieFallAngle, stoppieAngle);
+                torque = Mathf.Lerp(stoppieCriticalPush * 0.5f, stoppieCriticalPush, over);
+            }
+            else
+            {
+                torque = StoppieGravityTorque(stoppieAngle);
+
+                bool canLift = wheelieAngle <= 0f && currentSpeed >= stoppieMinSpeed;
+                if (Brake && canLift)
+                {
+                    float speedFactor = Mathf.InverseLerp(stoppieMinSpeed, maxSpeed, currentSpeed);
+                    float blend = Mathf.InverseLerp(stoppieSweetMin * 0.5f, stoppieSweetMin, stoppieAngle);
+                    torque += Mathf.Lerp(stoppieLiftTorque * speedFactor, stoppieHoldTorque, blend);
+                }
+                else if (stoppieAngle > 0f)
+                {
+                    // Frein relâché, l'arrière se repose ; trop lente, la moto ne tient plus sur la roue avant.
+                    torque -= Brake ? stalledPull : stoppieReleaseTorque;
+                }
+
+                if (stoppieAngle > 1f)
+                {
+                    torque += WheelieBumpTorque();
+                }
+            }
+
+            stoppieAngularVelocity += torque * dt;
+            stoppieAngularVelocity -= stoppieAngularVelocity * wheelieDamping * dt;
+            stoppieAngle += stoppieAngularVelocity * dt;
+
+            if (stoppieAngle <= 0f)
+            {
+                stoppieAngle = 0f;
+                if (stoppieAngularVelocity < 0f) stoppieAngularVelocity = 0f;
+            }
+
+            if (stoppieAngle >= stoppieFallAngle)
+            {
+                TriggerFall(true);
+            }
+        }
+
+        /// <summary>Couple de gravité sur la roue avant : rappel vers le sol sous la zone d'équilibre, dérive faible dedans.</summary>
+        float StoppieGravityTorque(float angle)
+        {
+            if (angle < stoppieSweetMin)
+            {
+                float t = (stoppieSweetMin - angle) / Mathf.Max(1f, stoppieSweetMin);
+                return -Mathf.Lerp(stoppieDrift, stoppieLowPull, t);
+            }
+
+            float inZone = (angle - stoppieSweetMin) / Mathf.Max(1f, stoppieSweetMax - stoppieSweetMin);
+            return Mathf.Lerp(-stoppieDrift, stoppieDrift, inZone);
+        }
+
+        /// <summary>
         /// En marche avant, l'entrée pilote une inclinaison cible, limitée à basse vitesse ; la moto la prend
         /// progressivement (ressort critique amorti, plus lent à haute vitesse), et le virage découle de
         /// l'angle réellement pris : w = g*tan(lean)/v, borné par la butée de guidon au pas.
@@ -689,7 +849,8 @@ namespace WheelingMoto.Gameplay
 
             float frontWheelUp = FrontWheelUp();
             float speedFactor = Mathf.Clamp01(currentSpeed / Mathf.Max(0.01f, leanFullSpeed));
-            float wheelieFactor = Mathf.Lerp(1f, wheelieSteerAuthority, frontWheelUp);
+            float wheelieFactor = Mathf.Lerp(1f, wheelieSteerAuthority, frontWheelUp)
+                * Mathf.Lerp(1f, stoppieSteerAuthority, RearWheelUp());
             float targetLean = -Steer * maxLeanAngle * speedFactor * wheelieFactor;
 
             float smoothTime = Mathf.Lerp(leanSmoothTimeLowSpeed, leanSmoothTimeHighSpeed,
@@ -734,19 +895,23 @@ namespace WheelingMoto.Gameplay
             }
         }
 
-        void TriggerFall()
+        /// <param name="forward">Vrai pour une chute par-dessus la roue avant, faux pour un basculement arrière.</param>
+        void TriggerFall(bool forward)
         {
             isFallen = true;
+            fallForward = forward;
             fallTimer = fallAnimationTime;
             currentSpeed = 0f;
             wheelieAngularVelocity = 0f;
+            stoppieAngularVelocity = 0f;
             Fell?.Invoke();
         }
 
         /// <summary>Court basculement visible, puis remise à plat immédiate sur place.</summary>
         void UpdateFall(float dt)
         {
-            wheelieAngle = Mathf.MoveTowards(wheelieAngle, fallVisualAngle, fallRotateSpeed * dt);
+            if (fallForward) stoppieAngle = Mathf.MoveTowards(stoppieAngle, fallVisualAngle, fallRotateSpeed * dt);
+            else wheelieAngle = Mathf.MoveTowards(wheelieAngle, fallVisualAngle, fallRotateSpeed * dt);
             UpdateVisual();
             ApplyMovement(dt);
 
@@ -766,6 +931,8 @@ namespace WheelingMoto.Gameplay
             isFallen = false;
             wheelieAngle = 0f;
             wheelieAngularVelocity = 0f;
+            stoppieAngle = 0f;
+            stoppieAngularVelocity = 0f;
             currentLean = 0f;
             leanVelocity = 0f;
             currentYawRate = 0f;
@@ -783,7 +950,18 @@ namespace WheelingMoto.Gameplay
             // Recalculée à chaque frame : les réglages du pilote se testent en jeu, sans relancer.
             if (riderHead != null) riderHead.localPosition = RiderEyePosition();
             if (visualPivot == null) return;
-            visualPivot.localRotation = Quaternion.Euler(-wheelieAngle, 0f, currentLean);
+            if (stoppieAngle > 0f)
+            {
+                // Sur la roue avant, la moto bascule autour du contact du pneu avant, un empattement devant.
+                Vector3 frontContact = new Vector3(0f, 0f, wheelbase);
+                visualPivot.localPosition = pivotRestPosition + frontContact - Quaternion.Euler(stoppieAngle, 0f, 0f) * frontContact;
+                visualPivot.localRotation = Quaternion.Euler(stoppieAngle, 0f, currentLean);
+            }
+            else
+            {
+                visualPivot.localPosition = pivotRestPosition;
+                visualPivot.localRotation = Quaternion.Euler(-wheelieAngle, 0f, currentLean);
+            }
         }
 
         /// <summary>Pose la moto sur la première surface sous elle, pour ne jamais démarrer coincé dans un bâtiment.</summary>
@@ -798,10 +976,33 @@ namespace WheelingMoto.Gameplay
             }
         }
 
+        /// <summary>Repère du point de départ dans la vue Scene : cercle et flèche dans la direction de départ.</summary>
+        void OnDrawGizmos()
+        {
+            if (spawnPoint == null) return;
+
+            Vector3 origin = spawnPoint.position;
+            Vector3 forward = Quaternion.Euler(0f, spawnPoint.eulerAngles.y, 0f) * Vector3.forward;
+            Vector3 right = Vector3.Cross(Vector3.up, forward);
+            Vector3 tip = origin + forward * 2f;
+
+            Gizmos.color = new Color(0.25f, 0.9f, 0.35f);
+            Gizmos.DrawWireSphere(origin, 0.5f);
+            Gizmos.DrawLine(origin, tip);
+            Gizmos.DrawLine(tip, tip - forward * 0.5f + right * 0.35f);
+            Gizmos.DrawLine(tip, tip - forward * 0.5f - right * 0.35f);
+        }
+
         /// <summary>Part de la roue avant en l'air : 0 roue au sol, 1 au-delà de l'angle de réduction de direction.</summary>
         float FrontWheelUp()
         {
             return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, Mathf.Max(0.1f, wheelieSteerFadeAngle), wheelieAngle));
+        }
+
+        /// <summary>Part de la roue arrière en l'air (roue avant) : 0 au sol, 1 au-delà de quelques degrés.</summary>
+        float RearWheelUp()
+        {
+            return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, StoppieLiftFadeAngle, stoppieAngle));
         }
 
         /// <summary>
@@ -856,6 +1057,8 @@ namespace WheelingMoto.Gameplay
 
             float dive = forkBrakeDive * frontBrakeWeight * Mathf.Clamp01(currentSpeed / 3f);
             float target = Mathf.Lerp(dive, -forkWheelieExtension, frontWheelUp);
+            // Sur la roue avant, tout le poids est sur la fourche : compression complète.
+            target = Mathf.Lerp(target, 1f, RearWheelUp());
             forkVelocity += ((target - forkCompression) * forkStiffness - forkVelocity * forkDamping) * dt;
             forkCompression += forkVelocity * dt;
             if (forkCompression > 1f || forkCompression < -forkWheelieExtension)

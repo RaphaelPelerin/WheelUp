@@ -6,9 +6,9 @@ using WheelingMoto.Gameplay;
 namespace WheelingMoto.UI
 {
     /// <summary>
-    /// Jauge verticale discrète affichant l'angle de wheeling en temps réel, en trois zones :
-    /// montée (sous l'équilibre), équilibre (vert) et critique (rouge, clignotante).
-    /// Les bornes des zones sont lues sur le contrôleur, donc tout réglage d'angle s'y reflète.
+    /// Jauge verticale discrète affichant l'angle d'équilibre en temps réel : celui du wheeling, ou celui de la
+    /// roue avant dès que l'arrière décolle. Trois zones : montée (sous l'équilibre), équilibre (vert) et
+    /// critique (rouge, clignotante). Les bornes sont lues sur le contrôleur, donc tout réglage d'angle s'y reflète.
     /// </summary>
     public class WheelieGauge
     {
@@ -26,8 +26,11 @@ namespace WheelingMoto.UI
         MotorcycleController controller;
         CanvasGroup group;
         Image frame;
+        GameObject wheelieZones;
+        GameObject stoppieZones;
         RectTransform marker;
         Image markerImage;
+        TextMeshProUGUI titleText;
         TextMeshProUGUI angleText;
         TextMeshProUGUI statusText;
 
@@ -43,19 +46,17 @@ namespace WheelingMoto.UI
             group.blocksRaycasts = false;
 
             frame = AddBand(root, "Frame", FrameColor, 0f, 1f, 4f);
-
-            float fall = Mathf.Max(1f, controller.wheelieFallAngle);
-            float sweetMin = Mathf.Clamp01(controller.wheelieSweetMin / fall);
-            float sweetMax = Mathf.Clamp01(controller.wheelieSweetMax / fall);
-            AddBand(root, "RisingZone", RisingZoneColor, 0f, sweetMin, 0f);
-            AddBand(root, "BalanceZone", BalanceZoneColor, sweetMin, sweetMax, 0f);
-            AddBand(root, "CriticalZone", CriticalZoneColor, sweetMax, 1f, 0f);
+            wheelieZones = AddZones(root, "WheelieZones", controller.wheelieSweetMin, controller.wheelieSweetMax, controller.wheelieFallAngle);
+            stoppieZones = AddZones(root, "StoppieZones", controller.stoppieSweetMin, controller.stoppieSweetMax, controller.stoppieFallAngle);
+            stoppieZones.SetActive(false);
 
             marker = UIFactory.CreateUIObject("Marker", root);
             markerImage = marker.gameObject.AddComponent<Image>();
             markerImage.raycastTarget = false;
             SetMarker(0f);
 
+            titleText = UIFactory.AddText(root, "TitleText", "", 13, theme.Text, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-70, 8), new Vector2(70, 28));
             angleText = UIFactory.AddText(root, "AngleText", "0°", 18, theme.Text, TextAnchor.MiddleCenter,
                 new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-60, -30), new Vector2(60, -8));
             statusText = UIFactory.AddText(root, "StatusText", "", 14, theme.Text, TextAnchor.MiddleCenter,
@@ -66,10 +67,19 @@ namespace WheelingMoto.UI
         {
             if (controller == null) return;
 
-            float angle = controller.WheelieAngle;
-            SetMarker(Mathf.Clamp01(angle / Mathf.Max(1f, controller.wheelieFallAngle)));
+            // La roue avant prend la main dès que l'arrière décolle : le wheeling est alors forcément à plat.
+            bool stoppie = controller.StoppieAngle > 0f;
+            if (stoppieZones.activeSelf != stoppie)
+            {
+                stoppieZones.SetActive(stoppie);
+                wheelieZones.SetActive(!stoppie);
+            }
 
-            WheelieZone zone = controller.CurrentWheelieZone;
+            float angle = stoppie ? controller.StoppieAngle : controller.WheelieAngle;
+            float fallAngle = stoppie ? controller.stoppieFallAngle : controller.wheelieFallAngle;
+            SetMarker(Mathf.Clamp01(angle / Mathf.Max(1f, fallAngle)));
+
+            WheelieZone zone = stoppie ? controller.CurrentStoppieZone : controller.CurrentWheelieZone;
             bool blinkOn = Mathf.Repeat(Time.unscaledTime * BlinkRate, 1f) < 0.5f;
 
             Color accent;
@@ -82,7 +92,8 @@ namespace WheelingMoto.UI
                     break;
                 case WheelieZone.Critical:
                     accent = blinkOn ? CriticalColor : Color.white;
-                    status = "FREINE !";
+                    // Sur la roue avant, rien ne rattrape la moto au-delà de l'équilibre.
+                    status = stoppie ? "CHUTE !" : "FREINE !";
                     break;
                 default:
                     accent = Color.white;
@@ -93,6 +104,8 @@ namespace WheelingMoto.UI
             markerImage.color = accent;
             angleText.color = accent;
             statusText.color = accent;
+            titleText.color = accent;
+            titleText.text = stoppie ? "ROUE AVANT" : "WHEELING";
             angleText.text = $"{Mathf.RoundToInt(angle)}°";
             statusText.text = status;
             frame.color = zone == WheelieZone.Critical && blinkOn ? FrameAlertColor : FrameColor;
@@ -102,6 +115,21 @@ namespace WheelingMoto.UI
         void SetMarker(float normalized)
         {
             UIFactory.SetRect(marker, new Vector2(0f, normalized), new Vector2(1f, normalized), new Vector2(-8f, -3f), new Vector2(8f, 3f));
+        }
+
+        /// <summary>Bandes montée / équilibre / critique, à l'échelle de l'angle de chute.</summary>
+        static GameObject AddZones(Transform parent, string name, float sweetMinAngle, float sweetMaxAngle, float fallAngle)
+        {
+            var zones = UIFactory.CreateUIObject(name, parent);
+            UIFactory.SetRect(zones, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+
+            float fall = Mathf.Max(1f, fallAngle);
+            float sweetMin = Mathf.Clamp01(sweetMinAngle / fall);
+            float sweetMax = Mathf.Clamp01(sweetMaxAngle / fall);
+            AddBand(zones, "RisingZone", RisingZoneColor, 0f, sweetMin, 0f);
+            AddBand(zones, "BalanceZone", BalanceZoneColor, sweetMin, sweetMax, 0f);
+            AddBand(zones, "CriticalZone", CriticalZoneColor, sweetMax, 1f, 0f);
+            return zones.gameObject;
         }
 
         static Image AddBand(Transform parent, string name, Color color, float yMin, float yMax, float padding)

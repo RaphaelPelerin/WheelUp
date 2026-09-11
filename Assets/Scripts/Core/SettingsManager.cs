@@ -2,13 +2,28 @@ using UnityEngine;
 
 namespace WheelingMoto.Core
 {
-    /// <summary>Réglages graphiques/audio persistés via PlayerPrefs.</summary>
+    /// <summary>Commande de direction du HUD de conduite.</summary>
+    public enum SteeringControl
+    {
+        Fleches,
+        Joystick
+    }
+
+    /// <summary>Réglages graphiques/audio/contrôles persistés via PlayerPrefs.</summary>
     public static class SettingsManager
     {
+        const string KeySteering = "settings_steering_control";
         const string KeyMasterVolume = "settings_master_volume";
         const string KeyMusicVolume = "settings_music_volume";
         const string KeySfxVolume = "settings_sfx_volume";
         const string KeyQualityLevel = "settings_quality_level";
+
+        /// <summary>Direction par flèches (par défaut) ou par joystick, qui revient au milieu au relâchement.</summary>
+        public static SteeringControl Steering
+        {
+            get => (SteeringControl)PlayerPrefs.GetInt(KeySteering, (int)SteeringControl.Fleches);
+            set => PlayerPrefs.SetInt(KeySteering, (int)value);
+        }
 
         public static float MasterVolume
         {
