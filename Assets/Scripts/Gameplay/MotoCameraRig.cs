@@ -48,8 +48,13 @@ namespace WheelingMoto.Gameplay
         public float exteriorFovAtMaxSpeed = 68f;
 
         [Header("Vue première personne")]
-        public float firstPersonFov = 68f;
-        public float firstPersonFovAtMaxSpeed = 82f;
+        [Tooltip("Champ de vision à l'arrêt : large, pour voir le réservoir, le guidon et les mains sous la route.")]
+        public float firstPersonFov = 78f;
+        public float firstPersonFovAtMaxSpeed = 86f;
+        [Tooltip("Regard plongé en plus à l'arrêt, en degrés : on voit la moto ; il se relève vers la route en roulant.")]
+        public float standstillLookDown = 16f;
+        [Tooltip("Vitesse (m/s) à partir de laquelle le regard est entièrement relevé vers la route.")]
+        public float lookUpSpeed = 8f;
         [Tooltip("Part du cabrage compensée par le regard : 1 = yeux toujours sur la route, 0 = regard collé à la moto (vers le ciel en wheeling).")]
         [Range(0f, 1f)]
         public float wheeliePitchCompensation = 0.85f;
@@ -64,8 +69,8 @@ namespace WheelingMoto.Gameplay
         public float maxFreeLookPitch = 35f;
         [Tooltip("Vitesse de retour du regard vers l'avant une fois le glissement relâché.")]
         public float freeLookReturnSpeed = 4f;
-        [Tooltip("Vibration moteur et route à pleine vitesse, en mètres.")]
-        public float speedShake = 0.006f;
+        [Tooltip("Vibration moteur et route à pleine vitesse, en mètres (0 : image stable).")]
+        public float speedShake = 0f;
         [Tooltip("Plan proche réduit pour voir le guidon sans qu'il soit coupé.")]
         public float firstPersonNearClip = 0.05f;
 
@@ -86,6 +91,8 @@ namespace WheelingMoto.Gameplay
 
         float freeLookYaw;
         float freeLookPitch;
+        float lookDown;
+        float lookDownVelocity;
 
         public CameraView CurrentView => view;
 
@@ -97,6 +104,7 @@ namespace WheelingMoto.Gameplay
         {
             cam = GetComponent<Camera>();
             defaultNearClip = cam.nearClipPlane;
+            lookDown = standstillLookDown;
             cam.nearClipPlane = view == CameraView.FirstPerson ? firstPersonNearClip : defaultNearClip;
             if (target != null)
             {
@@ -239,10 +247,18 @@ namespace WheelingMoto.Gameplay
             float lean = bike != null ? bike.LeanAngle : 0f;
             float headDown = bike != null ? bike.firstPersonHeadPitch : 0f;
 
+            // À l'arrêt, le regard plonge sur la moto ; il se relève vers la route en prenant de la vitesse.
+            float speed = bike != null ? Mathf.Abs(bike.SignedSpeed) : 0f;
+            float targetLookDown = standstillLookDown * (1f - Mathf.Clamp01(speed / Mathf.Max(0.1f, lookUpSpeed)));
+            lookDown = Mathf.SmoothDamp(lookDown, targetLookDown, ref lookDownVelocity, 0.35f, Mathf.Infinity, dt);
+            headDown += lookDown;
+
             // Regard construit à partir du cap de la moto, et non de son assiette : les yeux restent sur la route.
             // Seule une petite part du cabrage est conservée (sensation de lever) ; la tête redresse une partie
             // de l'inclinaison et regarde vers l'intérieur du virage.
-            float pitch = headDown + freeLookPitch - wheelie * (1f - wheeliePitchCompensation);
+            // Sur une pente, le regard suit la route : il se lève en montée, plonge en descente.
+            float slope = bike != null ? bike.GroundPitch : 0f;
+            float pitch = headDown + freeLookPitch - wheelie * (1f - wheeliePitchCompensation) - slope;
             float yaw = freeLookYaw - lean * lookIntoTurn;
             float roll = lean * (1f - headLevelling);
             Quaternion rotation = target.rotation * Quaternion.Euler(0f, yaw, 0f) * Quaternion.Euler(pitch, 0f, roll);

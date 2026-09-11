@@ -84,6 +84,10 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Contrôleur d'animation de la position de conduite (AS_Idle_Riding).")]
         public RuntimeAnimatorController riderAnimator;
 
+        [Header("Feux")]
+        [Tooltip("Matériau émissif des optiques (phare, feu arrière, clignotants). Référencé ici pour que la variante émissive du shader soit incluse dans les builds.")]
+        public Material lightMaterial;
+
         [Header("Conduite")]
         public float maxSpeed = 15.5f;
         public float acceleration = 10.5f;
@@ -158,6 +162,20 @@ namespace WheelingMoto.Gameplay
         public float gravity = -25f;
         [Tooltip("Vitesse conservée après avoir percuté un mur.")]
         public float wallImpactSpeed = 1.5f;
+        [Tooltip("Hauteur franchissable, en mètres : un trottoir passe, un muret non.")]
+        public float stepHeight = 0.22f;
+        [Tooltip("Pente maximale gravissable, en degrés.")]
+        public float maxClimbSlope = 38f;
+        [Tooltip("Rayon du sondage qui arrête l'avant et l'arrière de la moto contre les murs (la capsule n'en couvre que le milieu).")]
+        public float wallProbeRadius = 0.25f;
+
+        [Header("Suivi du sol")]
+        [Tooltip("Temps de lissage de l'assiette de la moto sur les pentes.")]
+        public float groundAlignSmoothTime = 0.1f;
+        [Tooltip("Pente maximale suivie par l'assiette, en degrés.")]
+        public float maxGroundPitch = 30f;
+        [Tooltip("Lissage vertical de la moto affichée : absorbe les petits à-coups du contrôleur sur les jointures du sol.")]
+        public float heightSmoothTime = 0.06f;
         [Tooltip("Hauteur du sondage vers le sol au démarrage, pour ne jamais apparaître dans le décor.")]
         public float groundProbeHeight = 200f;
 
@@ -244,6 +262,17 @@ namespace WheelingMoto.Gameplay
         Transform riderHead;
         Transform handlebarPart;
         Quaternion handlebarRestRotation;
+        MotoRig rig;
+        Transform visualModel;
+        Vector3 rigSeatLocal;
+        Transform frontWheel, rearWheel;
+        Quaternion frontWheelRest, rearWheelRest;
+        float wheelSpin;
+        float groundPitch, groundPitchVelocity;
+        float rearGroundOffset, rearGroundOffsetVelocity;
+        float smoothedHeight, smoothedHeightVelocity;
+        bool heightInitialized;
+        readonly RaycastHit[] probeHits = new RaycastHit[8];
         PosedPart[] frontBrakeParts, rearBrakeParts, forkParts;
         Bounds seatBounds;
         bool hasSeat;
@@ -291,6 +320,8 @@ namespace WheelingMoto.Gameplay
         public float WheelieAngle => wheelieAngle;
         /// <summary>Basculement sur la roue avant, en degrés (0 : roue arrière au sol).</summary>
         public float StoppieAngle => stoppieAngle;
+        /// <summary>Pente du sol sous la moto, en degrés (positive en montée).</summary>
+        public float GroundPitch => groundPitch;
         /// <summary>Vrai si la dernière chute est partie vers l'avant, par-dessus la roue avant.</summary>
         public bool LastFallForward => fallForward;
         /// <summary>Part de la roue arrière en l'air, de 0 à 1.</summary>
@@ -305,7 +336,15 @@ namespace WheelingMoto.Gameplay
         /// <summary>Poignée d'accélérateur, de 0 (fermée) à 1 (en grand, avec LEVER).</summary>
         internal float Throttle => throttle;
         /// <summary>Point d'assise du pilote sur la selle, dans l'espace du pivot visuel.</summary>
-        internal Vector3 SeatContactPoint => new Vector3(seatBounds.center.x, seatBounds.max.y, seatBounds.max.z - hipsBehindSeatFront);
+        internal Vector3 SeatContactPoint => rig != null
+            ? rigSeatLocal
+            : new Vector3(seatBounds.center.x, seatBounds.max.y, seatBounds.max.z - hipsBehindSeatFront);
+        /// <summary>Buste penché d'origine du pilote, propre au modèle (posture), en degrés.</summary>
+        internal float RiderForwardLean => rig != null ? rig.RiderForwardLean : 0f;
+        /// <summary>Levier d'embrayage à gauche (boîte manuelle) : le pilote le couvre de deux doigts.</summary>
+        internal bool HasClutchLever => rig != null && rig.HasClutchLever;
+        /// <summary>Commande de frein tenue (feu stop).</summary>
+        internal bool BrakeHeld => Brake;
         /// <summary>Vitesse de cabrage, en degrés par seconde (positive quand la roue monte).</summary>
         internal float WheelieAngularVelocity => wheelieAngularVelocity;
         /// <summary>Compression de la fourche (négative en détente).</summary>
@@ -314,6 +353,21 @@ namespace WheelingMoto.Gameplay
         internal float SteerInput => Steer;
         /// <summary>Part de la roue avant en l'air, de 0 à 1.</summary>
         internal float FrontWheelLift => FrontWheelUp();
+
+        /// <summary>Centres des poignées du gréement, dans l'espace de la colonne de direction, et leur rayon réel.</summary>
+        internal bool TryGetRigGrips(out Vector3 left, out Vector3 right, out float radius)
+        {
+            left = Vector3.zero;
+            right = Vector3.zero;
+            radius = 0f;
+            if (rig == null || handlebarPart == null || visualModel == null) return false;
+
+            Vector3 grip = rig.RightGrip;
+            right = handlebarPart.InverseTransformPoint(visualModel.TransformPoint(grip));
+            left = handlebarPart.InverseTransformPoint(visualModel.TransformPoint(new Vector3(-grip.x, grip.y, grip.z)));
+            radius = rig.GripRadius * rig.Scale;
+            return true;
+        }
 
         /// <summary>Yeux de la vue 1re personne fournis par le pilote (ancrés à son buste), dans l'espace du pivot visuel.</summary>
         internal void SetRiderEye(Vector3 localEye) => riderEyeOverride = localEye;
@@ -372,49 +426,49 @@ namespace WheelingMoto.Gameplay
             body.height = colliderHeight;
             body.radius = colliderRadius;
             body.center = new Vector3(0f, colliderHeight * 0.5f, 0f);
-            body.slopeLimit = 50f;
-            body.stepOffset = 0.4f;
+            body.slopeLimit = maxClimbSlope;
+            body.stepOffset = stepHeight;
 
             GameObject visual = null;
             if (visualPivot != null)
             {
+                GameObject prefab = bikePrefab != null ? bikePrefab : LoadCatalogModel();
+                rig = MotoRigs.Find(prefab);
+                if (rig != null)
+                {
+                    // Gréement connu : il fixe la taille réelle de la moto, la position des pneus et l'empattement.
+                    rearContactZ = rig.RearContact.z * rig.Scale;
+                    wheelbase = (rig.FrontContact.z - rig.RearContact.z) * rig.Scale;
+                }
+
                 // Pivot du wheeling posé sur le contact du pneu arrière. Le CharacterController flotte
                 // de sa skin width au-dessus du sol : on la retranche pour que les pneus touchent la route.
                 pivotRestPosition = new Vector3(0f, -body.skinWidth, rearContactZ);
                 visualPivot.localPosition = pivotRestPosition;
                 visualPivot.localRotation = Quaternion.identity;
 
-                GameObject prefab = bikePrefab != null ? bikePrefab : LoadCatalogModel();
                 if (prefab != null)
                 {
                     visual = Instantiate(prefab, visualPivot);
-                    visual.transform.localPosition = new Vector3(0f, modelGroundOffset, -rearContactZ);
-                    visual.transform.localRotation = Quaternion.Euler(visualEulerOffset);
+                    if (rig != null)
+                    {
+                        // À l'échelle réelle, le contact du pneu arrière posé sur le pivot du wheeling.
+                        visual.transform.localScale = Vector3.one * rig.Scale;
+                        visual.transform.localPosition = -rig.RearContact * rig.Scale;
+                        visual.transform.localRotation = Quaternion.identity;
+                    }
+                    else
+                    {
+                        visual.transform.localPosition = new Vector3(0f, modelGroundOffset, -rearContactZ);
+                        visual.transform.localRotation = Quaternion.Euler(visualEulerOffset);
+                    }
                     MotoPainter.Apply(visual, MotoCatalog.Default.Name);
 
-                    // Le prefab n'a pas d'Animator : guidon, freins et fourche sont posés par le code (LateUpdate).
                     Transform model = visual.transform;
-                    handlebarPart = FindPart(model, handlebarPartName);
-                    if (handlebarPart != null) handlebarRestRotation = handlebarPart.localRotation;
-                    else Debug.LogWarning($"[MotorcycleController] Pièce \"{handlebarPartName}\" introuvable : le guidon ne tournera pas.", this);
-
-                    // Poses complètes relevées dans les clips d'origine de la Honda C125
-                    // (Animations/front brake, rear wheel brake, front damper).
-                    frontBrakeParts = new[]
-                    {
-                        Pose(model, "C125_handle/locator___handle/axis___handle/F_5/front_brake/axis___front_brake", euler: new Vector3(0f, 27f, 0f)),
-                    };
-                    rearBrakeParts = new[]
-                    {
-                        Pose(model, "F_29/axis___pedal", euler: new Vector3(0f, 0f, -10f)),
-                        Pose(model, "swing_arm/axis_swing_arm/locator/F_18/axis___brake_cam", euler: new Vector3(15f, 0f, 0f)),
-                        Pose(model, "swing_arm/axis_swing_arm/locator/locator___inverse/locator___brake_rod", position: new Vector3(0f, 0.004f, -0.015f)),
-                    };
-                    forkParts = new[]
-                    {
-                        Pose(model, "C125_handle/locator___handle/axis___handle/front_damper", position: new Vector3(0f, 0.035f, 0f)),
-                        Pose(model, "C125_handle/locator___handle/axis___handle/front_damper_scale", scale: new Vector3(1f, 0.915f, 1f)),
-                    };
+                    visualModel = model;
+                    RemovePhysics(model);
+                    if (rig != null) RigModel(model);
+                    else RigC125(model);
                 }
             }
 
@@ -423,11 +477,20 @@ namespace WheelingMoto.Gameplay
             Transform headParent = visualPivot != null ? visualPivot : transform;
             riderHead = new GameObject("RiderHead").transform;
             riderHead.SetParent(headParent, false);
-            hasSeat = visual != null && TryMeasureParts(visual.transform, headParent,
-                n => n.StartsWith(seatPartPrefix, StringComparison.OrdinalIgnoreCase), out seatBounds);
+            if (rig != null && visual != null)
+            {
+                rigSeatLocal = headParent.InverseTransformPoint(visual.transform.TransformPoint(rig.SeatContact));
+                hasSeat = true;
+            }
+            else
+            {
+                hasSeat = visual != null && TryMeasureParts(visual.transform, headParent,
+                    n => n.StartsWith(seatPartPrefix, StringComparison.OrdinalIgnoreCase), out seatBounds);
+            }
             if (hasSeat)
             {
-                Debug.Log($"[MotorcycleController] Vue 1re personne : dessus de selle à {seatBounds.max.y:0.00} m, yeux à {RiderEyePosition().y:0.00} m.", this);
+                Debug.Log($"[MotorcycleController] {(rig != null ? rig.Name : "Modèle mesuré")} : assise à {SeatContactPoint.y:0.00} m, " +
+                    $"empattement {wheelbase:0.00} m.", this);
             }
             else if (autoFirstPersonEye)
             {
@@ -437,6 +500,83 @@ namespace WheelingMoto.Gameplay
             riderHead.localRotation = Quaternion.identity;
 
             SpawnRider(visual);
+        }
+
+        /// <summary>Colliders et corps rigides du modèle neutralisés : c'est le CharacterController qui porte la moto.</summary>
+        static void RemovePhysics(Transform model)
+        {
+            foreach (Rigidbody rb in model.GetComponentsInChildren<Rigidbody>(true))
+            {
+                rb.isKinematic = true;
+                rb.detectCollisions = false;
+                Destroy(rb);
+            }
+            // Désactivés tout de suite : Destroy n'agit qu'en fin de frame, après le calage sur la route (Start).
+            foreach (Collider c in model.GetComponentsInChildren<Collider>(true))
+            {
+                c.enabled = false;
+                Destroy(c);
+            }
+        }
+
+        /// <summary>
+        /// Gréement d'un modèle connu : pièces techniques masquées, colonne de direction (un pivot incliné de
+        /// la chasse, sous lequel passent les pièces qui braquent) et roues qui tournent avec la vitesse.
+        /// </summary>
+        void RigModel(Transform model)
+        {
+            foreach (string suffix in rig.HiddenParts)
+            {
+                Transform hidden = MotoRigs.Part(model, suffix);
+                if (hidden != null) hidden.gameObject.SetActive(false);
+            }
+
+            var steering = new GameObject("SteeringPivot").transform;
+            steering.SetParent(model, false);
+            steering.localPosition = rig.SteeringPivot;
+            steering.localRotation = Quaternion.Euler(-rig.SteeringRake, 0f, 0f);
+            foreach (string suffix in rig.SteeringParts)
+            {
+                Transform part = MotoRigs.Part(model, suffix);
+                if (part != null) part.SetParent(steering, true);
+                else Debug.LogWarning($"[MotorcycleController] Pièce \"*{suffix}\" introuvable : elle ne tournera pas avec le guidon.", this);
+            }
+            handlebarPart = steering;
+            handlebarRestRotation = steering.localRotation;
+
+            frontWheel = MotoRigs.Part(model, rig.FrontWheel);
+            rearWheel = MotoRigs.Part(model, rig.RearWheel);
+            if (frontWheel != null) frontWheelRest = frontWheel.localRotation;
+            if (rearWheel != null) rearWheelRest = rearWheel.localRotation;
+
+            // Après la colonne de direction : le faisceau du phare, rattaché à l'optique, tourne avec le guidon.
+            gameObject.AddComponent<MotoLights>().Setup(this, model, rig, lightMaterial);
+        }
+
+        /// <summary>Honda C125 : le prefab n'a pas d'Animator, guidon, freins et fourche sont posés par le code (LateUpdate).</summary>
+        void RigC125(Transform model)
+        {
+            handlebarPart = FindPart(model, handlebarPartName);
+            if (handlebarPart != null) handlebarRestRotation = handlebarPart.localRotation;
+            else Debug.LogWarning($"[MotorcycleController] Pièce \"{handlebarPartName}\" introuvable : le guidon ne tournera pas.", this);
+
+            // Poses complètes relevées dans les clips d'origine de la Honda C125
+            // (Animations/front brake, rear wheel brake, front damper).
+            frontBrakeParts = new[]
+            {
+                Pose(model, "C125_handle/locator___handle/axis___handle/F_5/front_brake/axis___front_brake", euler: new Vector3(0f, 27f, 0f)),
+            };
+            rearBrakeParts = new[]
+            {
+                Pose(model, "F_29/axis___pedal", euler: new Vector3(0f, 0f, -10f)),
+                Pose(model, "swing_arm/axis_swing_arm/locator/F_18/axis___brake_cam", euler: new Vector3(15f, 0f, 0f)),
+                Pose(model, "swing_arm/axis_swing_arm/locator/locator___inverse/locator___brake_rod", position: new Vector3(0f, 0.004f, -0.015f)),
+            };
+            forkParts = new[]
+            {
+                Pose(model, "C125_handle/locator___handle/axis___handle/front_damper", position: new Vector3(0f, 0.035f, 0f)),
+                Pose(model, "C125_handle/locator___handle/axis___handle/front_damper_scale", scale: new Vector3(1f, 0.915f, 1f)),
+            };
         }
 
         /// <summary>Pilote humanoïde assis sur la selle ; bras, mains et doigts sont posés par MotoRider.</summary>
@@ -592,6 +732,8 @@ namespace WheelingMoto.Gameplay
 
             UpdateSteering(dt);
             ApplyMovement(dt);
+            UpdateWheelSpin(dt);
+            UpdateGroundAlignment(dt);
             UpdateVisual();
             UpdateHandlebar(dt);
             UpdateBrakesAndFork(dt);
@@ -604,6 +746,9 @@ namespace WheelingMoto.Gameplay
             {
                 handlebarPart.localRotation = handlebarRestRotation * Quaternion.Euler(0f, handlebarAngle, 0f);
             }
+            // Roues : rotation autour de leur axe (X local du maillage), après la colonne de direction pour l'avant.
+            if (frontWheel != null) frontWheel.localRotation = frontWheelRest * Quaternion.Euler(wheelSpin, 0f, 0f);
+            if (rearWheel != null) rearWheel.localRotation = rearWheelRest * Quaternion.Euler(wheelSpin, 0f, 0f);
             ApplyPose(frontBrakeParts, frontBrakeWeight);
             ApplyPose(rearBrakeParts, rearBrakeWeight);
             ApplyPose(forkParts, forkCompression);
@@ -886,6 +1031,7 @@ namespace WheelingMoto.Gameplay
                 verticalSpeed += gravity * dt;
             }
 
+            LimitAgainstWalls(dt);
             Vector3 motion = transform.forward * currentSpeed + Vector3.up * verticalSpeed;
             CollisionFlags flags = body.Move(motion * dt);
 
@@ -950,17 +1096,21 @@ namespace WheelingMoto.Gameplay
             // Recalculée à chaque frame : les réglages du pilote se testent en jeu, sans relancer.
             if (riderHead != null) riderHead.localPosition = RiderEyePosition();
             if (visualPivot == null) return;
+            // Pivot posé sur le sol sous le pneu arrière, et hauteur lissée : les à-coups du contrôleur disparaissent.
+            float heightLag = heightInitialized ? smoothedHeight - transform.position.y : 0f;
+            Vector3 rest = pivotRestPosition + Vector3.up * (rearGroundOffset + heightLag);
+
             if (stoppieAngle > 0f)
             {
-                // Sur la roue avant, la moto bascule autour du contact du pneu avant, un empattement devant.
+                // Sur la roue avant, la moto bascule autour du contact du pneu avant, posé sur la pente.
                 Vector3 frontContact = new Vector3(0f, 0f, wheelbase);
-                visualPivot.localPosition = pivotRestPosition + frontContact - Quaternion.Euler(stoppieAngle, 0f, 0f) * frontContact;
-                visualPivot.localRotation = Quaternion.Euler(stoppieAngle, 0f, currentLean);
+                visualPivot.localPosition = rest + NoseUp(groundPitch) * frontContact - NoseUp(groundPitch - stoppieAngle) * frontContact;
+                visualPivot.localRotation = Quaternion.Euler(-(groundPitch - stoppieAngle), 0f, currentLean);
             }
             else
             {
-                visualPivot.localPosition = pivotRestPosition;
-                visualPivot.localRotation = Quaternion.Euler(-wheelieAngle, 0f, currentLean);
+                visualPivot.localPosition = rest;
+                visualPivot.localRotation = Quaternion.Euler(-(groundPitch + wheelieAngle), 0f, currentLean);
             }
         }
 
@@ -1067,6 +1217,96 @@ namespace WheelingMoto.Gameplay
                 forkCompression = Mathf.Clamp(forkCompression, -forkWheelieExtension, 1f);
                 forkVelocity = 0f;
             }
+        }
+
+        static Quaternion NoseUp(float degrees) => Quaternion.Euler(-degrees, 0f, 0f);
+
+        /// <summary>
+        /// Assiette sur les pentes : hauteur du sol sous chaque pneu, d'où l'inclinaison de la moto et la hauteur du
+        /// pneu arrière (pivot du wheeling). Lissées, comme la hauteur du contrôleur, pour une image sans tremblement.
+        /// </summary>
+        void UpdateGroundAlignment(float dt)
+        {
+            Vector3 rear = transform.TransformPoint(0f, 0f, rearContactZ);
+            Vector3 front = transform.TransformPoint(0f, 0f, rearContactZ + wheelbase);
+            float targetPitch = 0f;
+            float targetOffset = 0f;
+            if (body.isGrounded && GroundHeight(rear, out float rearY) && GroundHeight(front, out float frontY))
+            {
+                targetPitch = Mathf.Clamp(Mathf.Atan2(frontY - rearY, wheelbase) * Mathf.Rad2Deg, -maxGroundPitch, maxGroundPitch);
+                // À plat, le sol est à une skin width sous MotoRoot : décalage nul.
+                targetOffset = Mathf.Clamp(rearY - transform.position.y + body.skinWidth, -0.6f, 0.6f);
+            }
+            groundPitch = Mathf.SmoothDamp(groundPitch, targetPitch, ref groundPitchVelocity, groundAlignSmoothTime, Mathf.Infinity, dt);
+            rearGroundOffset = Mathf.SmoothDamp(rearGroundOffset, targetOffset, ref rearGroundOffsetVelocity, groundAlignSmoothTime, Mathf.Infinity, dt);
+
+            float y = transform.position.y;
+            if (!heightInitialized)
+            {
+                smoothedHeight = y;
+                heightInitialized = true;
+            }
+            smoothedHeight = Mathf.SmoothDamp(smoothedHeight, y, ref smoothedHeightVelocity, heightSmoothTime, Mathf.Infinity, dt);
+            // Au-delà de quelques centimètres (descente d'un trottoir), la moto suit sans retard.
+            smoothedHeight = Mathf.Clamp(smoothedHeight, y - 0.15f, y + 0.15f);
+        }
+
+        /// <summary>Hauteur du sol sous un point, sans compter la capsule de la moto.</summary>
+        bool GroundHeight(Vector3 point, out float y)
+        {
+            y = 0f;
+            int count = Physics.RaycastNonAlloc(point + Vector3.up * 0.8f, Vector3.down, probeHits, 2f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float nearest = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                if (probeHits[i].collider == body || probeHits[i].distance >= nearest) continue;
+                nearest = probeHits[i].distance;
+                y = probeHits[i].point.y;
+            }
+            return nearest < float.MaxValue;
+        }
+
+        /// <summary>
+        /// La capsule du contrôleur ne couvre que le milieu de la moto : devant (roue avant) et derrière, un sondage
+        /// arrête la moto contre les murs. Il passe au-dessus de la hauteur de trottoir, qui reste franchissable.
+        /// </summary>
+        void LimitAgainstWalls(float dt)
+        {
+            if (Mathf.Abs(currentSpeed) < 0.01f) return;
+
+            float sign = Mathf.Sign(currentSpeed);
+            float travel = Mathf.Abs(currentSpeed) * dt;
+            float overhang = Mathf.Max(0f, wheelbase * 0.5f + 0.3f - colliderRadius);
+            Vector3 origin = transform.position + Vector3.up * (stepHeight + wallProbeRadius + 0.05f);
+            int count = Physics.SphereCastNonAlloc(origin, wallProbeRadius, transform.forward * sign, probeHits,
+                colliderRadius + overhang + travel, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+
+            float nearest = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit hit = probeHits[i];
+                if (hit.collider == body || hit.distance <= 0f) continue;
+                // Une pente gravissable n'est pas un mur.
+                if (Vector3.Angle(hit.normal, Vector3.up) < maxClimbSlope) continue;
+                nearest = Mathf.Min(nearest, hit.distance);
+            }
+            if (nearest == float.MaxValue) return;
+
+            float free = Mathf.Max(0f, nearest - colliderRadius - overhang);
+            if (free < travel)
+            {
+                // Contact : la moto s'arrête contre le mur au lieu de le traverser ou de monter dessus.
+                currentSpeed = free <= 0.01f ? 0f : sign * free / Mathf.Max(dt, 0.0001f);
+            }
+        }
+
+        /// <summary>Tour de roue : distance parcourue divisée par le rayon réel.</summary>
+        void UpdateWheelSpin(float dt)
+        {
+            if (rig == null) return;
+            float radius = Mathf.Max(0.05f, rig.WheelRadius * rig.Scale);
+            wheelSpin = Mathf.Repeat(wheelSpin + currentSpeed / radius * Mathf.Rad2Deg * dt, 360f);
         }
 
         static void ApplyPose(PosedPart[] parts, float weight)

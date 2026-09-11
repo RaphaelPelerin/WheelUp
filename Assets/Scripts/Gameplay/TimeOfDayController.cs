@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using WheelingMoto.Core;
 
 namespace WheelingMoto.Gameplay
@@ -29,7 +30,7 @@ namespace WheelingMoto.Gameplay
         public Color fogColor = new Color(0.72f, 0.8f, 0.88f);
         public float fogDensity = 0.0025f;
 
-        const int DayReflectionResolution = 128;
+        const int DayReflectionResolution = 256;
         const float DayReflectionSize = 5000f;
 
         // Start et non Awake : la moto et son pilote, créés dans les Awake, doivent aussi passer au jour.
@@ -54,6 +55,14 @@ namespace WheelingMoto.Gameplay
             sun.color = sunColor;
             sun.intensity = sunIntensity;
             sun.shadows = LightShadows.Soft;
+            // Biais propres au soleil : sans eux, les ombres « grésillent » sur la moto et le pilote (acné d'ombre).
+            if (!sunObject.TryGetComponent(out UniversalAdditionalLightData lightData))
+            {
+                lightData = sunObject.AddComponent<UniversalAdditionalLightData>();
+            }
+            lightData.usePipelineSettings = false;
+            sun.shadowBias = 0.1f;
+            sun.shadowNormalBias = 0.6f;
             RenderSettings.sun = sun;
 
             if (daySkybox != null) RenderSettings.skybox = daySkybox;

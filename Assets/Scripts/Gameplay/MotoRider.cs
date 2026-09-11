@@ -9,10 +9,12 @@ namespace WheelingMoto.Gameplay
     /// - le buste, qui vit avec la moto : il compense le cabrage, jette son poids vers l'avant quand la roue
     ///   monte vite, se couche en zone critique, plonge au freinage et au retour de la roue, et se penche
     ///   dans les virages (surtout roue levée, où l'on dirige au poids du corps) ; la tête garde l'horizon ;
-    /// - les bras, par IK deux os, jusqu'aux poignées du guidon (qui tournent avec la direction) ;
+    /// - les bras, par IK deux os, jusqu'aux poignées du guidon (qui tournent avec la direction) : la main se
+    ///   place dans le prolongement de l'avant-bras, poignet presque droit, enroulée autour de la poignée, et
+    ///   l'avant-bras pivote sur son axe pour suivre la main ;
     /// - le poignet droit, qui roule autour de la poignée d'accélérateur avec les gaz ;
-    /// - les doigts, refermés sur les poignées ; index et majeur droits posés sur le levier de frein,
-    ///   qu'ils tirent au freinage.
+    /// - les doigts, refermés sur les poignées ; index et majeur droits posés sur le levier de frein, qu'ils
+    ///   tirent au freinage, et à gauche sur l'embrayage quand la moto en a un.
     /// Le pilote est calé au démarrage : bassin sur la selle, puis avancé si ses bras n'atteignent pas le guidon.
     /// La vue 1re personne se fait depuis ses yeux, ancrés à son cou : la caméra suit ses mouvements sans jamais
     /// entrer dans le corps. La tête est masquée dans cette vue.
@@ -26,7 +28,7 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Avancée maximale sur la selle si les bras n'atteignent pas le guidon.")]
         public float maxReachShift = 0.2f;
         [Tooltip("Yeux de la vue 1re personne par rapport à l'articulation de la tête : côté (x), haut (y), avant (z).")]
-        public Vector3 eyeOffsetFromHead = new Vector3(0f, 0.08f, 0.1f);
+        public Vector3 eyeOffsetFromHead = new Vector3(0f, 0.06f, 0.02f);
 
         [Header("Vie du buste")]
         [Tooltip("Part du cabrage que le buste compense en se penchant vers l'avant (0 = collé à la moto, 1 = reste vertical).")]
@@ -50,10 +52,15 @@ namespace WheelingMoto.Gameplay
         public float bodySmoothTime = 0.12f;
 
         [Header("Mains")]
-        [Tooltip("Nom des poignées dans le modèle de moto (Honda C125 : GRIP).")]
+        [Tooltip("Nom des poignées dans le modèle de moto, quand la moto n'a pas de gréement (Honda C125 : GRIP).")]
         public string gripPartName = "GRIP";
-        [Tooltip("Inclinaison des mains sur les poignées : doigts vers l'avant et le bas, en degrés.")]
+        [Tooltip("Inclinaison des doigts pour la première passe, avant l'alignement sur l'avant-bras, en degrés.")]
         public float gripPitch = 35f;
+        [Tooltip("Poignet relevé par rapport à l'avant-bras, en degrés : léger, comme un pilote qui tient son guidon.")]
+        public float wristExtension = 12f;
+        [Tooltip("Part de la rotation de la main reprise par l'avant-bras (0 : poignet qui vrille, 1 : avant-bras rigide).")]
+        [Range(0f, 1f)]
+        public float forearmTwistShare = 0.6f;
         [Tooltip("Rotation du poignet droit à pleins gaz, en degrés.")]
         public float throttleTwist = 30f;
         [Tooltip("Écartement des coudes vers l'extérieur.")]
@@ -63,11 +70,12 @@ namespace WheelingMoto.Gameplay
 
         [Header("Doigts (flexion en degrés : proximale, intermédiaire, distale)")]
         [Tooltip("Doigts refermés sur la poignée.")]
-        public Vector3 wrapCurl = new Vector3(60f, 75f, 45f);
-        public Vector3 thumbCurl = new Vector3(10f, 25f, 20f);
-        [Tooltip("Index et majeur droits posés sur le levier, frein relâché.")]
+        public Vector3 wrapCurl = new Vector3(62f, 78f, 48f);
+        [Tooltip("Pouce enroulé sous la poignée.")]
+        public Vector3 thumbCurl = new Vector3(20f, 35f, 30f);
+        [Tooltip("Index et majeur posés sur un levier (frein à droite, embrayage à gauche), levier relâché.")]
         public Vector3 leverRestCurl = new Vector3(15f, 20f, 12f);
-        [Tooltip("Index et majeur droits, levier serré à fond.")]
+        [Tooltip("Index et majeur droits, levier de frein serré à fond.")]
         public Vector3 leverPullCurl = new Vector3(40f, 50f, 30f);
 
         const float PalmThickness = 0.02f;
@@ -86,6 +94,8 @@ namespace WheelingMoto.Gameplay
             public float upperLength, lowerLength, palmLength;
             // Repère de la paume dans l'espace de la main : direction des doigts, normale côté paume.
             public Vector3 fingersLocal, palmNormalLocal;
+            // Normale de la paume vue depuis l'avant-bras, en pose de repos : sert à le faire pivoter avec la main.
+            public Vector3 forearmPalmLocal;
             // Centre de la poignée, dans l'espace de la colonne de direction.
             public Vector3 gripLocal;
             public readonly Transform[][] fingers = new Transform[5][];
@@ -197,7 +207,7 @@ namespace WheelingMoto.Gameplay
                 }
             }
 
-            // Repère de la paume, relevé sur la pose de repos (doigts tendus).
+            // Repère de la paume, relevé sur la pose de repos (doigts tendus, main dans l'axe de l'avant-bras).
             Transform index = arm.fingers[(int)Finger.Index][0];
             Transform middle = arm.fingers[(int)Finger.Middle][0];
             Transform little = arm.fingers[(int)Finger.Little][0];
@@ -210,6 +220,7 @@ namespace WheelingMoto.Gameplay
 
             arm.fingersLocal = arm.hand.InverseTransformDirection(fingersDir);
             arm.palmNormalLocal = arm.hand.InverseTransformDirection(palmNormal);
+            arm.forearmPalmLocal = arm.lower.InverseTransformDirection(palmNormal);
             arm.palmLength = Vector3.Distance(arm.hand.position, middle.position);
             return arm;
         }
@@ -217,6 +228,15 @@ namespace WheelingMoto.Gameplay
         /// <summary>Centres des poignées, mesurés sur le modèle dans l'espace de la colonne de direction.</summary>
         bool MeasureGrips(Transform bikeModel)
         {
+            if (bike.TryGetRigGrips(out Vector3 rigLeft, out Vector3 rigRight, out float rigRadius))
+            {
+                // Gréement connu : poignées relevées dans le modèle.
+                leftArm.gripLocal = rigLeft;
+                rightArm.gripLocal = rigRight;
+                gripRadius = rigRadius;
+                return true;
+            }
+
             Transform bar = bike.HandlebarPart;
             if (bar == null || !MotorcycleController.TryMeasureParts(bikeModel, bar,
                     n => string.Equals(n, gripPartName, StringComparison.OrdinalIgnoreCase), out Bounds grips))
@@ -249,9 +269,11 @@ namespace WheelingMoto.Gameplay
 
             // L'Animator peut mettre une frame ou deux à poser le corps : calage répété au démarrage.
             bool calibrating = calibrationCount < CalibrationFrames;
-            if (calibrating) Calibrate(frame);
+            if (calibrating) PlaceOnSeat(frame);
 
             PoseBody(frame, Time.deltaTime);
+            // L'avancée se mesure buste posé : penché, le pilote atteint le guidon de plus près.
+            if (calibrating) ShiftForReach(frame);
             PoseArm(leftArm, frame, 0f, 0f);
             PoseArm(rightArm, frame, bike.Throttle, bike.FrontBrakeLever);
 
@@ -271,19 +293,22 @@ namespace WheelingMoto.Gameplay
             }
         }
 
-        void Calibrate(Transform frame)
+        void PlaceOnSeat(Transform frame)
         {
             Vector3 seat = bike.SeatContactPoint + Vector3.up * hipHeightAboveSeat;
             transform.position += frame.TransformPoint(seat) - hips.position;
+        }
 
-            // Animation faite pour une autre moto : si les bras n'atteignent pas le guidon, le pilote s'avance.
+        /// <summary>Animation faite pour une autre moto : si les bras n'atteignent pas le guidon, le pilote s'avance.</summary>
+        void ShiftForReach(Transform frame)
+        {
             float excess = Mathf.Max(ReachExcess(leftArm, frame), ReachExcess(rightArm, frame));
             transform.position += frame.forward * Mathf.Clamp(excess, 0f, maxReachShift);
         }
 
         float ReachExcess(Arm arm, Transform frame)
         {
-            GripTarget(arm, frame, 0f, out Vector3 wrist, out _, out _);
+            DefaultGrip(arm, frame, out Vector3 wrist, out _, out _);
             return Vector3.Distance(arm.upper.position, wrist) - 0.95f * (arm.upperLength + arm.lowerLength);
         }
 
@@ -318,7 +343,8 @@ namespace WheelingMoto.Gameplay
             float critical = Mathf.InverseLerp(bike.wheelieSweetMax, bike.wheelieFallAngle, wheelie);
             float balance = Mathf.Clamp(bike.WheelieAngularVelocity * balanceReaction, -maxBalanceReaction, maxBalanceReaction);
 
-            float targetPitch = wheelie * wheelieBodyLean
+            float targetPitch = bike.RiderForwardLean
+                + wheelie * wheelieBodyLean
                 + balance * lift
                 + criticalLean * critical
                 + forkDip * Mathf.Max(0f, bike.ForkCompression) * (1f - rearLift)
@@ -347,53 +373,96 @@ namespace WheelingMoto.Gameplay
             if (head != null) head.rotation = nod * head.rotation;
         }
 
-        /// <summary>Position du poignet et repère de la paume voulus pour tenir la poignée.</summary>
-        void GripTarget(Arm arm, Transform frame, float throttle, out Vector3 wrist, out Vector3 fingersDir, out Vector3 palmNormal)
+        /// <summary>Main à l'angle par défaut sur la poignée : sert à situer l'avant-bras avant l'alignement.</summary>
+        void DefaultGrip(Arm arm, Transform frame, out Vector3 wrist, out Vector3 fingersDir, out Vector3 palmNormal)
         {
             Transform bar = bike.HandlebarPart;
-            Vector3 right = bar.right;
-            Vector3 forward = Vector3.ProjectOnPlane(frame.forward, right).normalized;
-            Vector3 up = Vector3.Cross(forward, right);
+            Vector3 gripAxis = bar.right;
+            Vector3 forward = Vector3.ProjectOnPlane(frame.forward, gripAxis).normalized;
+            Vector3 up = Vector3.Cross(forward, gripAxis);
 
-            // Paume sur le dessus de la poignée, doigts qui l'enveloppent par l'avant.
             float pitch = gripPitch * Mathf.Deg2Rad;
             fingersDir = forward * Mathf.Cos(pitch) - up * Mathf.Sin(pitch);
-            palmNormal = -up * Mathf.Cos(pitch) - forward * Mathf.Sin(pitch);
+            palmNormal = Vector3.Cross(gripAxis, fingersDir).normalized;
+            wrist = WristFor(arm, bar.TransformPoint(arm.gripLocal), fingersDir, palmNormal);
+        }
 
+        /// <summary>Poignet pour une main dont la paume enveloppe la poignée : paume posée sur le caoutchouc, doigts devant.</summary>
+        Vector3 WristFor(Arm arm, Vector3 grip, Vector3 fingersDir, Vector3 palmNormal)
+        {
+            Vector3 palmCenter = grip - palmNormal * (gripRadius + PalmThickness);
+            return palmCenter - fingersDir * (arm.palmLength * 0.5f);
+        }
+
+        /// <summary>
+        /// Bras posé en deux passes. D'abord la main à l'angle par défaut, pour situer l'avant-bras ; puis la main
+        /// réorientée dans le prolongement de l'avant-bras (poignet presque droit, légèrement relevé), enroulée
+        /// autour de la poignée, et le bras résolu à nouveau vers ce poignet. Les gaz font ensuite rouler la main
+        /// autour de la poignée. L'avant-bras pivote sur son axe pour suivre la main, puis les doigts se referment.
+        /// </summary>
+        void PoseArm(Arm arm, Transform frame, float throttle, float lever)
+        {
+            Transform bar = bike.HandlebarPart;
+            Vector3 gripAxis = bar.right;
+            Vector3 grip = bar.TransformPoint(arm.gripLocal);
+            Vector3 side = arm.isRight ? frame.right : -frame.right;
+
+            DefaultGrip(arm, frame, out Vector3 wrist, out Vector3 fingersDir, out _);
+            SolveTwoBone(arm, wrist, ElbowPole(arm, wrist, side, frame));
+
+            // Doigts dans le prolongement de l'avant-bras, sur le plan perpendiculaire à la poignée.
+            Vector3 aligned = Vector3.ProjectOnPlane(arm.hand.position - arm.lower.position, gripAxis);
+            if (aligned.sqrMagnitude > 1e-6f && Vector3.Dot(aligned, frame.forward) > 0f)
+            {
+                fingersDir = Quaternion.AngleAxis(-wristExtension, gripAxis) * aligned.normalized;
+            }
             if (arm.isRight && throttle > 0f)
             {
                 // Gaz : la main roule vers l'arrière autour de la poignée.
-                Quaternion twist = Quaternion.AngleAxis(-throttleTwist * throttle, right);
-                fingersDir = twist * fingersDir;
-                palmNormal = twist * palmNormal;
+                fingersDir = Quaternion.AngleAxis(-throttleTwist * throttle, gripAxis) * fingersDir;
             }
+            Vector3 palmNormal = Vector3.Cross(gripAxis, fingersDir).normalized;
 
-            Vector3 palmCenter = bar.TransformPoint(arm.gripLocal) - palmNormal * (gripRadius + PalmThickness);
-            wrist = palmCenter - fingersDir * (arm.palmLength * 0.5f);
-        }
-
-        void PoseArm(Arm arm, Transform frame, float throttle, float lever)
-        {
-            GripTarget(arm, frame, throttle, out Vector3 wrist, out Vector3 fingersDir, out Vector3 palmNormal);
-
-            Vector3 side = arm.isRight ? frame.right : -frame.right;
-            Vector3 pole = (arm.upper.position + wrist) * 0.5f + side * elbowOut - frame.up * elbowDown;
-            SolveTwoBone(arm, wrist, pole);
+            wrist = WristFor(arm, grip, fingersDir, palmNormal);
+            SolveTwoBone(arm, wrist, ElbowPole(arm, wrist, side, frame));
+            TwistForearm(arm, palmNormal);
 
             // Main orientée sur la poignée : son repère de paume est aligné sur le repère voulu.
             Quaternion current = Quaternion.LookRotation(
                 arm.hand.TransformDirection(arm.fingersLocal), arm.hand.TransformDirection(arm.palmNormalLocal));
             arm.hand.rotation = Quaternion.LookRotation(fingersDir, palmNormal) * Quaternion.Inverse(current) * arm.hand.rotation;
 
-            // Tourner autour de cet axe amène les doigts vers la paume.
+            // Tourner autour de cet axe (celui de la poignée) amène les doigts vers la paume.
             Vector3 knuckleAxis = Vector3.Cross(fingersDir, palmNormal);
-            Vector3 leverCurl = Vector3.Lerp(leverRestCurl, leverPullCurl, lever);
+            bool coversLever = arm.isRight || bike.HasClutchLever;
+            Vector3 leverCurl = arm.isRight ? Vector3.Lerp(leverRestCurl, leverPullCurl, lever) : leverRestCurl;
             for (int f = 0; f < 5; f++)
             {
-                bool onLever = arm.isRight && (f == (int)Finger.Index || f == (int)Finger.Middle);
+                bool onLever = coversLever && (f == (int)Finger.Index || f == (int)Finger.Middle);
                 Vector3 curl = f == (int)Finger.Thumb ? thumbCurl : onLever ? leverCurl : wrapCurl;
                 Curl(arm, f, curl, knuckleAxis);
             }
+        }
+
+        /// <summary>Coudes écartés vers l'extérieur et un peu vers le bas, comme un pilote sur un guidon large.</summary>
+        Vector3 ElbowPole(Arm arm, Vector3 wrist, Vector3 side, Transform frame)
+        {
+            return (arm.upper.position + wrist) * 0.5f + side * elbowOut - frame.up * elbowDown;
+        }
+
+        /// <summary>L'avant-bras pivote sur son axe vers l'orientation de la main : le poignet ne vrille pas.</summary>
+        void TwistForearm(Arm arm, Vector3 palmNormal)
+        {
+            Vector3 axis = arm.hand.position - arm.lower.position;
+            if (axis.sqrMagnitude < 1e-8f) return;
+            axis.Normalize();
+
+            Vector3 current = Vector3.ProjectOnPlane(arm.lower.TransformDirection(arm.forearmPalmLocal), axis);
+            Vector3 wanted = Vector3.ProjectOnPlane(palmNormal, axis);
+            if (current.sqrMagnitude < 1e-6f || wanted.sqrMagnitude < 1e-6f) return;
+
+            float angle = Vector3.SignedAngle(current, wanted, axis) * forearmTwistShare;
+            arm.lower.rotation = Quaternion.AngleAxis(angle, axis) * arm.lower.rotation;
         }
 
         /// <summary>IK analytique épaule-coude-poignet : le coude part du côté du pôle.</summary>

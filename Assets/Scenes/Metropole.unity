@@ -163249,11 +163249,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bcdcaa3b80bc47f1a7a7a57b9b2d8f34, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  bikePrefab: {fileID: 2198236148893643018, guid: 4bb17f466c1f44f898b048ee1c43ea6d, type: 3}
+  bikePrefab: {fileID: 8866848260732270353, guid: 38afb42373a97d749bf5767ecd68a542, type: 3}
   visualPivot: {fileID: 900012}
   riderPrefab: {fileID: 919132149155446097, guid: c723a1d888b9eb241a23f91826965e02, type: 3}
   riderAnimator: {fileID: 9100000, guid: 25eec9e285139d042a731b89a571d22a, type: 2}
   spawnPoint: {fileID: 900202}
+  lightMaterial: {fileID: 2100000, guid: e1b4b25b708842ed8fb1e95ddc9db6ea, type: 2}
 --- !u!1 &900011
 GameObject:
   m_ObjectHideFlags: 0
