@@ -146,6 +146,9 @@ namespace WheelingMoto.UI
             return sprite;
         }
 
+        /// <summary>Résolution de référence des canvas : tous les gabarits d'interface sont exprimés dans ces unités.</summary>
+        public static readonly Vector2 ReferenceResolution = new Vector2(1920f, 1080f);
+
         public static Canvas CreateRootCanvas(string name)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -154,12 +157,42 @@ namespace WheelingMoto.UI
 
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.referenceResolution = ReferenceResolution;
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
 
             EnsureEventSystem();
             return canvas;
+        }
+
+        /// <summary>
+        /// Conteneur calé sur la zone sûre de l'écran, à créer sous le canvas : tout ce qui se touche ou se lit
+        /// doit y vivre. Sur un téléphone bord à bord, ce qui est posé en dehors passe sous l'encoche, les coins
+        /// arrondis ou la barre d'accueil. Seuls les fonds pleins écran restent à la racine du canvas.
+        /// </summary>
+        public static RectTransform CreateSafeArea(Transform root, string name = "SafeArea")
+        {
+            var rt = CreateUIObject(name, root);
+            rt.gameObject.AddComponent<SafeAreaFitter>();
+            return rt;
+        }
+
+        /// <summary>
+        /// Taille de la zone sûre, convertie en unités de canvas (celles des gabarits). Reprend la formule du
+        /// CanvasScaler en « Match Width Or Height » réglé à 0,5 : le facteur d'échelle est la moyenne
+        /// géométrique des rapports de largeur et de hauteur. Se calcule dès Awake, contrairement au rect du
+        /// canvas, qui n'est connu qu'après la première passe de mise en page.
+        /// </summary>
+        public static Vector2 SafeAreaSize()
+        {
+            if (Screen.width <= 0 || Screen.height <= 0) return ReferenceResolution;
+
+            float scale = Mathf.Sqrt(Screen.width / ReferenceResolution.x * (Screen.height / ReferenceResolution.y));
+            if (scale <= 0.0001f) return ReferenceResolution;
+
+            // Dans l'éditeur et sur les écrans sans encoche, la zone sûre couvre tout l'écran.
+            Rect safe = Screen.safeArea;
+            return new Vector2(safe.width / scale, safe.height / scale);
         }
 
         public static void EnsureEventSystem()
