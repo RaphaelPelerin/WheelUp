@@ -74,6 +74,18 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Plan proche réduit pour voir le guidon sans qu'il soit coupé.")]
         public float firstPersonNearClip = 0.05f;
 
+        [Header("Vue de chute")]
+        [Tooltip("Distance au pilote à terre.")]
+        public float crashDistance = 4.5f;
+        [Tooltip("Hauteur visée au-dessus du pilote.")]
+        public float crashHeight = 0.9f;
+        public float crashPitch = 18f;
+        [Tooltip("Tour lent autour du pilote à terre, en degrés par seconde.")]
+        public float crashOrbitSpeed = 12f;
+        [Tooltip("Temps de glissement de la caméra jusqu'à sa place autour du pilote : elle ne saute pas au choc.")]
+        public float crashBlendTime = 0.45f;
+        public float crashFov = 55f;
+
         Camera cam;
         MotorcycleController bike;
         // Le jeu démarre toujours en vue 1re personne.
@@ -94,7 +106,16 @@ namespace WheelingMoto.Gameplay
         float lookDown;
         float lookDownVelocity;
 
+        // Vue de chute : le pilote à terre, la vue d'avant la chute mise de côté le temps du crash.
+        Transform crashFocus;
+        CameraView viewBeforeCrash;
+        float crashYaw;
+        float crashOrbitPitch;
+        Vector3 crashVelocity;
+
         public CameraView CurrentView => view;
+        /// <summary>Vrai tant que la caméra tourne autour du pilote à terre.</summary>
+        public bool InCrashView => crashFocus != null;
 
         float SpeedFactor => bike != null
             ? Mathf.Clamp01(Mathf.Abs(bike.SignedSpeed) / Mathf.Max(0.1f, bike.maxSpeed))
@@ -114,6 +135,9 @@ namespace WheelingMoto.Gameplay
 
         public void ToggleView()
         {
+            // Pendant une chute, la place du pilote est vide : on ne peut pas y mettre la caméra.
+            if (crashFocus != null) return;
+
             view = view == CameraView.Exterior ? CameraView.FirstPerson : CameraView.Exterior;
             cam.nearClipPlane = view == CameraView.FirstPerson ? firstPersonNearClip : defaultNearClip;
             freeLookYaw = 0f;
@@ -133,10 +157,49 @@ namespace WheelingMoto.Gameplay
             }
         }
 
+        /// <summary>
+        /// Chute : la caméra recule derrière le pilote à terre et tourne lentement autour de lui, le temps
+        /// qu'il choisisse de repartir. La vue d'avant la chute est reprise au respawn.
+        /// </summary>
+        public void EnterCrashView(Transform focus)
+        {
+            if (focus == null || crashFocus != null) return;
+
+            crashFocus = focus;
+            viewBeforeCrash = view;
+            // Départ de trois quarts arrière : on voit à la fois le pilote qui roule et la moto qu'il quitte.
+            crashYaw = (target != null ? target.eulerAngles.y : transform.eulerAngles.y) + 35f;
+            crashOrbitPitch = crashPitch;
+            crashVelocity = Vector3.zero;
+            currentDistance = crashDistance;
+            cam.nearClipPlane = defaultNearClip;
+        }
+
+        /// <summary>Respawn : retour au point de vue d'avant la chute, posé derrière la moto relevée.</summary>
+        public void ExitCrashView()
+        {
+            if (crashFocus == null) return;
+
+            crashFocus = null;
+            view = viewBeforeCrash;
+            cam.nearClipPlane = view == CameraView.FirstPerson ? firstPersonNearClip : defaultNearClip;
+            freeLookYaw = 0f;
+            freeLookPitch = 0f;
+            needsSnap = true;
+        }
+
         public void AddLookInput(Vector2 screenDelta)
         {
             // Normalisé par la hauteur d'écran : même sensation quelle que soit la résolution du téléphone.
             Vector2 normalized = screenDelta / Mathf.Max(1f, Screen.height);
+
+            if (crashFocus != null)
+            {
+                crashYaw += normalized.x * orbitSensitivity;
+                crashOrbitPitch = Mathf.Clamp(crashOrbitPitch - normalized.y * orbitSensitivity, minPitch, maxPitch);
+                lastLookInputTime = Time.time;
+                return;
+            }
 
             if (view == CameraView.Exterior)
             {
@@ -159,6 +222,12 @@ namespace WheelingMoto.Gameplay
             ReadKeyboard();
 
             float dt = Time.deltaTime;
+            if (crashFocus != null)
+            {
+                UpdateCrash(dt);
+                return;
+            }
+
             if (view == CameraView.Exterior)
             {
                 UpdateExterior(dt);
@@ -229,6 +298,38 @@ namespace WheelingMoto.Gameplay
 
             transform.SetPositionAndRotation(pivot + back * currentDistance, rotation);
             cam.fieldOfView = Mathf.Lerp(exteriorFov, exteriorFovAtMaxSpeed, SpeedFactor);
+        }
+
+        /// <summary>
+        /// Le pilote est à terre : la caméra le cadre en troisième personne et tourne doucement autour de lui.
+        /// Elle rejoint sa place en glissant depuis là où elle était au moment du choc — depuis les yeux du
+        /// pilote en vue 1re personne — plutôt que d'y sauter d'une frame à l'autre.
+        /// </summary>
+        void UpdateCrash(float dt)
+        {
+            crashYaw += crashOrbitSpeed * dt;
+
+            Vector3 pivot = crashFocus.position + Vector3.up * crashHeight;
+            Vector3 back = Quaternion.Euler(crashOrbitPitch, crashYaw, 0f) * Vector3.back;
+
+            float wanted = crashDistance;
+            if (Physics.SphereCast(pivot, collisionRadius, back, out RaycastHit hit, crashDistance,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                wanted = Mathf.Max(minDistance, hit.distance);
+            }
+            currentDistance = wanted < currentDistance ? wanted : Mathf.MoveTowards(currentDistance, wanted, 4f * dt);
+
+            transform.position = Vector3.SmoothDamp(transform.position, pivot + back * currentDistance,
+                ref crashVelocity, crashBlendTime, Mathf.Infinity, dt);
+
+            Vector3 toPivot = pivot - transform.position;
+            if (toPivot.sqrMagnitude > 1e-4f)
+            {
+                Quaternion look = Quaternion.LookRotation(toPivot);
+                transform.rotation = Quaternion.Slerp(transform.rotation, look, 1f - Mathf.Exp(-8f * dt));
+            }
+            cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, crashFov, 1f - Mathf.Exp(-5f * dt));
         }
 
         void UpdateFirstPerson(float dt)

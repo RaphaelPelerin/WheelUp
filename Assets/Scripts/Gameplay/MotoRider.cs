@@ -121,6 +121,9 @@ namespace WheelingMoto.Gameplay
         Transform eyeAnchor;
         Vector3 eyeInAnchor;
 
+        // Squelette utilisable : sans lui, rien ne doit être posé, même si le pilote est réactivé après une chute.
+        bool ready;
+
         /// <summary>Appelé par MotorcycleController juste après l'instanciation, pose de repos encore intacte.</summary>
         public void Setup(MotorcycleController owner, Transform bikeModel, Animator animator)
         {
@@ -145,7 +148,32 @@ namespace WheelingMoto.Gameplay
             {
                 Debug.LogWarning("[MotoRider] Squelette ou poignées introuvables : bras non posés.", this);
                 enabled = false;
+                return;
             }
+
+            ready = true;
+        }
+
+        /// <summary>
+        /// Pilote remis en selle après une éjection (voir <see cref="RiderEjection"/>) : tout est recalé comme
+        /// au démarrage, l'Animator ayant repris la main sur la pose de conduite.
+        /// </summary>
+        public void ReturnToSeat()
+        {
+            if (!ready) return;
+
+            calibrationCount = 0;
+            bodyPitch = 0f;
+            bodyPitchVelocity = 0f;
+            bodyRoll = 0f;
+            bodyRollVelocity = 0f;
+            enabled = true;
+        }
+
+        /// <summary>Pilote éjecté : il retrouve sa tête, réduite à rien tant qu'on regardait par ses yeux.</summary>
+        void OnDisable()
+        {
+            if (head != null) head.localScale = headRestScale;
         }
 
         /// <summary>Vertèbres qui se partagent l'inclinaison du buste, du bas vers le haut.</summary>
@@ -319,12 +347,16 @@ namespace WheelingMoto.Gameplay
         /// </summary>
         void AnchorEyes(Transform frame)
         {
+            // Le calage est refait à chaque retour en selle ; la mesure, elle, ne s'annonce qu'une fois.
+            bool first = eyeAnchor == null;
             eyeAnchor = neck != null ? neck : head != null ? head.parent : null;
             if (head == null || eyeAnchor == null) return;
 
             Vector3 eye = head.position
                 + frame.right * eyeOffsetFromHead.x + frame.up * eyeOffsetFromHead.y + frame.forward * eyeOffsetFromHead.z;
             eyeInAnchor = eyeAnchor.InverseTransformPoint(eye);
+
+            if (!first) return;
 
             Vector3 eyeLocal = frame.InverseTransformPoint(eye);
             Vector3 gripsLocal = frame.InverseTransformPoint(

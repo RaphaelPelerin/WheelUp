@@ -5,11 +5,13 @@ using WheelingMoto.Data;
 namespace WheelingMoto.Core
 {
     /// <summary>
-    /// Achats en argent réel : retrait des publicités (achat unique) et lots de pièces.
+    /// Achats en argent réel : retrait des publicités (achat unique) et lots de pièces, et publicités à
+    /// récompense, que le joueur choisit de regarder pour rattraper une prouesse perdue à la chute.
     ///
-    /// Stub sans paiement : à brancher plus tard sur Unity IAP (package com.unity.purchasing).
-    /// Le point d'entrée unique est <see cref="Purchase"/>, pour que l'intégration du vrai store
-    /// n'ait qu'un seul endroit à remplacer et que l'interface n'ait pas à changer.
+    /// Stub sans paiement ni régie : à brancher plus tard sur Unity IAP (com.unity.purchasing) et sur
+    /// Unity Ads (com.unity.ads). Les deux points d'entrée uniques sont <see cref="Purchase"/> et
+    /// <see cref="ShowRewardedAd"/>, pour que la vraie intégration n'ait que ces endroits à remplacer et
+    /// que l'interface n'ait pas à changer.
     /// </summary>
     public static class MonetizationManager
     {
@@ -47,6 +49,18 @@ namespace WheelingMoto.Core
                 if (success) AdsRemoved = true;
                 onComplete?.Invoke(success);
             });
+        }
+
+        /// <summary>
+        /// Publicité à récompense, toujours à la demande du joueur (rattraper une prouesse après une chute).
+        /// <paramref name="onComplete"/> reçoit vrai si la pub a été regardée jusqu'au bout, donc si la
+        /// récompense est due. Tant que la régie n'est pas branchée, la vidéo est considérée vue ; pour un
+        /// joueur qui a acheté le retrait des publicités, la récompense est donnée sans rien lui montrer.
+        /// </summary>
+        public static void ShowRewardedAd(Action<bool> onComplete)
+        {
+            bool watched = true;
+            onComplete?.Invoke(watched);
         }
 
         /// <summary>Achète un lot de pièces et crédite le solde dès que le paiement est accepté.</summary>

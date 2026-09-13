@@ -1,6 +1,9 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 using UnityEngine.UI;
 using WheelingMoto.Core;
 using WheelingMoto.Gameplay;
@@ -10,7 +13,8 @@ namespace WheelingMoto.UI
     /// <summary>
     /// HUD de la scène Métropole : commandes tactiles (direction par flèches ou par joystick selon les
     /// Paramètres, GAZ / LEVER / FREIN), vitesse, jauge d'angle (wheeling ou roue avant), bandeau « Chute ! »,
-    /// bouton de changement de vue et zone de glissement pour tourner la caméra.
+    /// menu de chute (repartir ou racheter la prouesse), bouton de changement de vue et zone de glissement
+    /// pour tourner la caméra. Pilote à terre, les commandes sont rangées : on ne conduit pas une moto couchée.
     /// Tout ce qui se touche ou se lit est cadré dans la zone sûre de l'écran (encoche, coins arrondis,
     /// barre d'accueil), avec une marge : rien n'est rogné sur les téléphones à écran bord à bord.
     /// </summary>
@@ -19,8 +23,8 @@ namespace WheelingMoto.UI
         const float FallOverlayHold = 0.9f;
         const float FallOverlayFade = 0.5f;
 
-        // Gabarit des commandes, en unités du canvas (référence 1920 x 1080), mesuré depuis la zone sûre.
-        const float Margin = 24f;
+        // Gabarit des commandes, en unités du canvas (référence 1920 x 1080), mesuré depuis la zone sûre et
+        // ramené à l'échelle de l'écran par MeasureControls : rien ne doit jamais sortir des bords.
         const float Gap = 20f;
         const float SteerButtonSize = 250f;
         const float JoystickSize = 330f;
@@ -30,9 +34,14 @@ namespace WheelingMoto.UI
         const float BrakeHeight = 210f;
         const float LiftHeight = 180f;
         const int ControlFontSize = 34;
-
-        const string WheelieFallHint = "Dose LEVER et FREIN pour rester dans la zone verte";
-        const string StoppieFallHint = "Roue avant : relâche FREIN avant la zone rouge, rien ne te rattrape au-delà";
+        // Marge au bord de la zone sûre : jamais moins que MinMargin, et sinon cette part du petit côté de
+        // l'écran. Sur un téléphone à coins arrondis, 24 unités (2 mm) frôlent l'arrondi et la barre d'accueil.
+        const float MinMargin = 24f;
+        const float MarginShare = 0.045f;
+        // Couloir laissé libre entre les deux piles de boutons : la route doit rester visible entre les pouces.
+        const float MinCorridor = 200f;
+        // Bande réservée en haut de l'écran (vitesse, MENU, VUE) au-dessus des commandes.
+        const float TopRowHeight = 120f;
 
         // Boutons translucides : la route reste visible sous les pouces. À l'appui, le fond passe à
         // l'orange du thème, l'assombrissement par défaut du Button ne se verrait pas sur ce fond.
@@ -49,11 +58,19 @@ namespace WheelingMoto.UI
         TextMeshProUGUI viewLabel;
         CameraView displayedView;
         WheelieGauge gauge;
+        StuntScoreHud stunts;
+        CrashMenu crashMenu;
+        PauseMenu pauseMenu;
+        GameObject controlsRoot;
+        RectTransform steeringRoot;
+        SteeringControl builtSteering;
         CanvasGroup fallOverlay;
         TextMeshProUGUI fallHint;
         float fallOverlayTimer;
         bool leftHeld;
         bool rightHeld;
+        float margin = MinMargin;
+        float controlScale = 1f;
 
         void Awake()
         {
@@ -74,15 +91,32 @@ namespace WheelingMoto.UI
             {
                 controller.Fell -= OnFell;
             }
+            stunts?.Dispose();
+            crashMenu?.Dispose();
+            pauseMenu?.Dispose();
         }
 
         void Update()
         {
+            // Échap sur PC, bouton retour sur Android (Unity le rapporte comme Échap) : pause, puis retour arrière.
+            if (BackPressed())
+            {
+                if (pauseMenu.Showing) pauseMenu.Back();
+                else pauseMenu.Open();
+            }
+
             if (controller != null)
             {
                 speedText.text = $"{Mathf.RoundToInt(controller.SpeedKmh)} km/h";
                 gauge?.Tick();
+                stunts?.Tick();
             }
+
+            crashMenu?.Tick();
+            // Pilote à terre ou jeu en pause : les commandes disparaissent, et les boutons maintenus se
+            // relâchent avec elles.
+            bool riding = !(crashMenu != null && crashMenu.Showing) && !pauseMenu.Showing;
+            if (controlsRoot != null && controlsRoot.activeSelf != riding) controlsRoot.SetActive(riding);
 
             // La vue peut aussi changer au clavier (C / V) : le libellé suit.
             if (cameraRig != null && viewLabel != null && cameraRig.CurrentView != displayedView)
@@ -97,15 +131,49 @@ namespace WheelingMoto.UI
             }
         }
 
+        static bool BackPressed()
+        {
+#if ENABLE_INPUT_SYSTEM
+            return Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+#else
+            return Input.GetKeyDown(KeyCode.Escape);
+#endif
+        }
+
         void OnFell()
         {
-            fallHint.text = controller != null && controller.LastFallForward ? StoppieFallHint : WheelieFallHint;
+            fallHint.text = CrashMenu.Hint(controller);
             fallOverlayTimer = FallOverlayHold + FallOverlayFade;
             fallOverlay.alpha = 1f;
         }
 
+        /// <summary>
+        /// Cale le gabarit des commandes sur l'écran réel. La marge suit la taille de l'écran, pour que rien
+        /// ne colle au bord ni aux coins arrondis ; et si le gabarit complet ne tient pas dans la zone sûre
+        /// (écran étroit, format inhabituel), tout est réduit d'un même facteur. Sans cela, les deux piles de
+        /// boutons finissent par se chevaucher et par déborder de l'écran.
+        /// </summary>
+        void MeasureControls()
+        {
+            Vector2 safe = UIFactory.SafeAreaSize();
+            margin = Mathf.Max(MinMargin, Mathf.Min(safe.x, safe.y) * MarginShare);
+
+            // Pile de gauche (flèches ou joystick), pile de droite (FREIN/LEVER puis GAZ), et le couloir central.
+            float left = Mathf.Max(SteerButtonSize * 2f + Gap, JoystickSize);
+            float right = PedalWidth * 2f + Gap;
+            float needWidth = 2f * margin + left + right + MinCorridor;
+            float needHeight = TopRowHeight + margin + BrakeHeight + Gap + LiftHeight;
+
+            controlScale = Mathf.Clamp(Mathf.Min(safe.x / needWidth, safe.y / needHeight), 0.5f, 1f);
+        }
+
+        /// <summary>Mesure du gabarit ramenée à l'échelle retenue pour cet écran.</summary>
+        float S(float value) => value * controlScale;
+
         void Build()
         {
+            MeasureControls();
+
             var canvas = UIFactory.CreateRootCanvas("MetropoleHUDCanvas");
             var root = canvas.transform;
 
@@ -114,20 +182,30 @@ namespace WheelingMoto.UI
             BuildCameraDragZone(root);
             BuildFallOverlay(root);
 
-            var safeArea = UIFactory.CreateUIObject("SafeArea", root);
-            safeArea.gameObject.AddComponent<SafeAreaFitter>();
+            var safeArea = UIFactory.CreateSafeArea(root);
 
-            speedText = UIFactory.AddText(safeArea, "SpeedText", "0 km/h", 26, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(0, 1), new Vector2(Margin, -60), new Vector2(Margin + 230, -20));
+            // En haut au centre : le compteur reste dans le champ de vision sans empiéter sur les coins,
+            // occupés par les commandes et les compteurs de prouesses.
+            speedText = UIFactory.AddText(safeArea, "SpeedText", "0 km/h", 30, theme.Text, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-170, -64), new Vector2(170, -20), FontStyles.Bold);
 
-            UIFactory.AddButton(safeArea, "BackButton", "◀ MENU", ControlColor, ControlTextColor, 16,
-                new Vector2(1, 1), new Vector2(1, 1), new Vector2(-Margin - 160, -60), new Vector2(-Margin, -20),
-                () => SceneLoader.LoadMainMenu());
+            // Pause plutôt que retour direct au menu : on peut y régler les Paramètres sans quitter la partie.
+            int topFont = Mathf.RoundToInt(S(16f));
+            UIFactory.AddButton(safeArea, "PauseButton", "II  PAUSE", ControlColor, ControlTextColor, topFont,
+                new Vector2(1, 1), new Vector2(1, 1), new Vector2(-margin - S(160f), -S(60f)), new Vector2(-margin, -S(20f)),
+                () => pauseMenu.Open());
+
+            // Tout ce qui ne sert qu'en roulant (commandes, jauge d'angle, changement de vue) est réuni sous
+            // un même objet : la chute le range d'un coup, et les boutons restés enfoncés se relâchent avec lui
+            // (HoldButton et SteerJoystick lâchent tout à la désactivation).
+            var driving = UIFactory.CreateUIObject("Driving", safeArea);
+            UIFactory.SetRect(driving, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            controlsRoot = driving.gameObject;
 
             if (cameraRig != null)
             {
-                var viewButton = UIFactory.AddButton(safeArea, "ViewButton", "VUE", ControlColor, ControlTextColor, 16,
-                    new Vector2(1, 1), new Vector2(1, 1), new Vector2(-Margin - 310, -60), new Vector2(-Margin - 170, -20),
+                var viewButton = UIFactory.AddButton(driving, "ViewButton", "VUE", ControlColor, ControlTextColor, topFont,
+                    new Vector2(1, 1), new Vector2(1, 1), new Vector2(-margin - S(310f), -S(60f)), new Vector2(-margin - S(170f), -S(20f)),
                     () => cameraRig.ToggleView());
                 viewLabel = viewButton.GetComponentInChildren<TextMeshProUGUI>();
                 RefreshViewLabel();
@@ -136,30 +214,72 @@ namespace WheelingMoto.UI
             if (controller != null)
             {
                 gauge = new WheelieGauge();
-                gauge.Build(safeArea, theme, controller);
+                gauge.Build(driving, theme, controller);
+
+                // Le compteur de prouesses reste, lui : c'est là que s'annoncent les points perdus à la chute.
+                stunts = new StuntScoreHud();
+                stunts.Build(safeArea, theme, controller);
             }
 
-            if (SettingsManager.Steering == SteeringControl.Joystick)
+            // Direction dans son propre conteneur : elle se reconstruit si on change de commande en pause.
+            steeringRoot = UIFactory.CreateUIObject("Steering", driving);
+            UIFactory.SetRect(steeringRoot, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            BuildSteering();
+
+            BuildPedals(driving);
+
+            // Créés en dernier, donc dessinés par-dessus tout le reste : ce sont des menus, ils passent devant
+            // le HUD — la pause devant le menu de chute, qu'elle peut interrompre.
+            if (controller != null)
             {
-                BuildJoystick(safeArea);
+                crashMenu = new CrashMenu();
+                crashMenu.Build(root, theme, controller);
+            }
+            pauseMenu = new PauseMenu();
+            pauseMenu.Build(root, theme, OnPauseClosed);
+        }
+
+        void BuildSteering()
+        {
+            builtSteering = SettingsManager.Steering;
+            if (builtSteering == SteeringControl.Joystick)
+            {
+                BuildJoystick(steeringRoot);
             }
             else
             {
-                BuildSteerArrows(safeArea);
+                BuildSteerArrows(steeringRoot);
             }
+        }
 
-            BuildPedals(safeArea);
+        /// <summary>Reprise après la pause : la commande de direction a pu changer dans les Paramètres.</summary>
+        void OnPauseClosed()
+        {
+            if (SettingsManager.Steering == builtSteering) return;
+
+            // Détruits en fin de frame : détachés d'abord, pour que les nouveaux prennent leur place tout de suite.
+            for (int i = steeringRoot.childCount - 1; i >= 0; i--)
+            {
+                Transform old = steeringRoot.GetChild(i);
+                old.SetParent(null, false);
+                Destroy(old.gameObject);
+            }
+            leftHeld = false;
+            rightHeld = false;
+            controller?.SetSteer(0f);
+            BuildSteering();
         }
 
         void BuildSteerArrows(Transform parent)
         {
+            float size = S(SteerButtonSize);
             AddHold(parent, "SteerLeft", "◀", Vector2.zero, Vector2.zero,
-                new Vector2(Margin, Margin), new Vector2(Margin + SteerButtonSize, Margin + SteerButtonSize),
+                new Vector2(margin, margin), new Vector2(margin + size, margin + size),
                 () => { leftHeld = true; UpdateSteer(); }, () => { leftHeld = false; UpdateSteer(); });
 
-            float x = Margin + SteerButtonSize + Gap;
+            float x = margin + size + S(Gap);
             AddHold(parent, "SteerRight", "▶", Vector2.zero, Vector2.zero,
-                new Vector2(x, Margin), new Vector2(x + SteerButtonSize, Margin + SteerButtonSize),
+                new Vector2(x, margin), new Vector2(x + size, margin + size),
                 () => { rightHeld = true; UpdateSteer(); }, () => { rightHeld = false; UpdateSteer(); });
         }
 
@@ -168,7 +288,7 @@ namespace WheelingMoto.UI
         {
             var area = UIFactory.CreateUIObject("SteerJoystick", parent);
             UIFactory.SetRect(area, Vector2.zero, Vector2.zero,
-                new Vector2(Margin, Margin), new Vector2(Margin + JoystickSize, Margin + JoystickSize));
+                new Vector2(margin, margin), new Vector2(margin + S(JoystickSize), margin + S(JoystickSize)));
             var background = area.gameObject.AddComponent<Image>();
             background.sprite = SteerJoystick.CircleSprite;
             background.color = ControlColor;
@@ -179,7 +299,7 @@ namespace WheelingMoto.UI
                 new Vector2(0f, -6f), new Vector2(0f, 6f), rounded: true);
             rail.raycastTarget = false;
 
-            float half = JoystickKnobSize * 0.5f;
+            float half = S(JoystickKnobSize) * 0.5f;
             var knob = UIFactory.CreateUIObject("Knob", area);
             UIFactory.SetRect(knob, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-half, -half), new Vector2(half, half));
             var knobImage = knob.gameObject.AddComponent<Image>();
@@ -197,19 +317,20 @@ namespace WheelingMoto.UI
         {
             Vector2 corner = new Vector2(1f, 0f);
 
-            float throttleLeft = -Margin - PedalWidth;
+            float width = S(PedalWidth);
+            float throttleLeft = -margin - width;
             AddHold(parent, "ThrottleButton", "GAZ", corner, corner,
-                new Vector2(throttleLeft, Margin), new Vector2(-Margin, Margin + ThrottleHeight),
+                new Vector2(throttleLeft, margin), new Vector2(-margin, margin + S(ThrottleHeight)),
                 () => controller?.SetThrottle(true), () => controller?.SetThrottle(false));
 
-            float brakeLeft = throttleLeft - Gap - PedalWidth;
+            float brakeLeft = throttleLeft - S(Gap) - width;
             AddHold(parent, "BrakeButton", "FREIN", corner, corner,
-                new Vector2(brakeLeft, Margin), new Vector2(brakeLeft + PedalWidth, Margin + BrakeHeight),
+                new Vector2(brakeLeft, margin), new Vector2(brakeLeft + width, margin + S(BrakeHeight)),
                 () => controller?.SetBrake(true), () => controller?.SetBrake(false));
 
-            float liftBottom = Margin + BrakeHeight + Gap;
+            float liftBottom = margin + S(BrakeHeight) + S(Gap);
             AddHold(parent, "LiftButton", "LEVER", corner, corner,
-                new Vector2(brakeLeft, liftBottom), new Vector2(brakeLeft + PedalWidth, liftBottom + LiftHeight),
+                new Vector2(brakeLeft, liftBottom), new Vector2(brakeLeft + width, liftBottom + S(LiftHeight)),
                 () => controller?.SetLift(true), () => controller?.SetLift(false));
         }
 
@@ -239,7 +360,8 @@ namespace WheelingMoto.UI
 
             UIFactory.AddText(band.transform, "FallTitle", "CHUTE !", 56, Color.white, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -10f), new Vector2(0f, 60f));
-            fallHint = UIFactory.AddText(band.transform, "FallHint", WheelieFallHint, 18, theme.TextMuted, TextAnchor.MiddleCenter,
+            // Le conseil dépend de ce qui a fait tomber le pilote : il est écrit à chaque chute (OnFell).
+            fallHint = UIFactory.AddText(band.transform, "FallHint", "", 18, theme.TextMuted, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -55f), new Vector2(0f, -15f));
         }
 
@@ -257,7 +379,8 @@ namespace WheelingMoto.UI
 
         void AddHold(Transform parent, string name, string label, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax, UnityAction onPressed, UnityAction onReleased)
         {
-            var btn = UIFactory.AddButton(parent, name, label, ControlColor, ControlTextColor, ControlFontSize, anchorMin, anchorMax, offsetMin, offsetMax, null);
+            var btn = UIFactory.AddButton(parent, name, label, ControlColor, ControlTextColor,
+                Mathf.RoundToInt(S(ControlFontSize)), anchorMin, anchorMax, offsetMin, offsetMax, null);
             btn.transition = Selectable.Transition.None;
             var background = btn.GetComponent<Image>();
 

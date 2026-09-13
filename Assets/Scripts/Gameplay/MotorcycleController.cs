@@ -16,6 +16,19 @@ namespace WheelingMoto.Gameplay
         Critical
     }
 
+    /// <summary>Ce qui a mis le pilote à terre : donne le conseil affiché et le sens de la chute.</summary>
+    public enum CrashCause
+    {
+        /// <summary>Wheeling parti trop loin : la moto bascule en arrière.</summary>
+        Wheelie,
+        /// <summary>Roue avant passée au-delà du point de non-retour : par-dessus le guidon.</summary>
+        Stoppie,
+        /// <summary>Mur, voiture ou trottoir pris de plein fouet.</summary>
+        Wall,
+        /// <summary>Réception manquée après une chute de plusieurs étages.</summary>
+        Landing
+    }
+
     /// <summary>
     /// Contrôleur de moto V1 (free-roam). Le déplacement passe par un CharacterController :
     /// collisions avec le décor et gravité, sans l'instabilité d'une vraie physique deux-roues.
@@ -90,11 +103,13 @@ namespace WheelingMoto.Gameplay
 
         [Header("Conduite")]
         public float maxSpeed = 15.5f;
-        public float acceleration = 10.5f;
-        public float brakingDeceleration = 20f;
+        [Tooltip("Reprise à l'ouverture des gaz : nerveuse, la moto prend sa vitesse en une seconde environ.")]
+        public float acceleration = 13.5f;
+        [Tooltip("Freinage roue avant au sol : mordant, la moto s'arrête court.")]
+        public float brakingDeceleration = 26f;
         public float naturalDeceleration = 4f;
         [Tooltip("Multiplicateur d'accélération avec LEVER : gaz en grand pour lever la roue.")]
-        public float liftAccelerationBoost = 1.45f;
+        public float liftAccelerationBoost = 1.6f;
 
         [Header("Marche arrière")]
         public float reverseMaxSpeed = 3f;
@@ -144,7 +159,7 @@ namespace WheelingMoto.Gameplay
 
         [Header("Freins et fourche (animation)")]
         [Tooltip("Vitesse d'actionnement du levier et de la pédale de frein : pose complète en 1/x seconde.")]
-        public float brakeLeverSpeed = 9f;
+        public float brakeLeverSpeed = 13f;
         [Tooltip("Plongée de la fourche au freinage, roue avant au sol (0 = aucune, 1 = compression complète).")]
         public float forkBrakeDive = 0.8f;
         [Tooltip("Choc encaissé par la fourche quand la roue avant retombe, par degré/s de vitesse de chute.")]
@@ -188,12 +203,12 @@ namespace WheelingMoto.Gameplay
         public float wheelieFallAngle = 68f;
 
         [Header("Wheeling - couples (degrés/s²)")]
-        [Tooltip("Levée donnée par LEVER roue au sol et en montée.")]
-        public float wheelieLiftTorque = 195f;
+        [Tooltip("Levée donnée par LEVER roue au sol et en montée : forte, la roue décolle sèchement.")]
+        public float wheelieLiftTorque = 250f;
         [Tooltip("Levée donnée par LEVER une fois dans la zone d'équilibre : modérée, pour pouvoir doser.")]
         public float wheelieHoldTorque = 42f;
-        [Tooltip("Frein arrière dans la zone de montée et d'équilibre.")]
-        public float wheelieBrakeTorque = 175f;
+        [Tooltip("Frein arrière dans la zone de montée et d'équilibre : il rabat la roue aussi vite qu'elle monte.")]
+        public float wheelieBrakeTorque = 215f;
         [Tooltip("Frein arrière en zone critique : appliqué en plus d'un arrêt net de la montée.")]
         public float criticalBrakeTorque = 420f;
         [Tooltip("Rappel vers le sol quand la moto est à plat ou presque.")]
@@ -222,7 +237,7 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Angle de chute vers l'avant.")]
         public float stoppieFallAngle = 45f;
         [Tooltip("Levée de l'arrière par FREIN à pleine vitesse, en degrés/s² : proportionnelle à la vitesse, il faut freiner fort en roulant vite.")]
-        public float stoppieLiftTorque = 300f;
+        public float stoppieLiftTorque = 350f;
         [Tooltip("Levée par FREIN une fois dans la zone d'équilibre : modérée, pour pouvoir doser.")]
         public float stoppieHoldTorque = 40f;
         [Tooltip("Retour de l'arrière vers le sol quand on relâche FREIN.")]
@@ -239,24 +254,52 @@ namespace WheelingMoto.Gameplay
         public float stoppieSteerAuthority = 0.4f;
 
         [Header("Chute et respawn")]
-        [Tooltip("Durée du basculement visible avant la remise à plat.")]
-        public float fallAnimationTime = 0.3f;
+        [Tooltip("Sans moto physique (modèle absent) : vitesse du basculement visuel, en degrés par seconde.")]
         public float fallRotateSpeed = 150f;
-        [Tooltip("Angle atteint pendant l'animation de chute.")]
+        [Tooltip("Sans moto physique : angle atteint par le basculement visuel.")]
         public float fallVisualAngle = 95f;
+        [Tooltip("Vitesse d'impact contre un obstacle au-delà de laquelle le pilote passe par-dessus, en m/s (8 : environ 29 km/h). Seule compte la vitesse dirigée vers l'obstacle : frotter un mur en biais ne fait pas tomber.")]
+        public float wallCrashSpeed = 8f;
+        [Tooltip("Vitesse de chute verticale au-delà de laquelle la réception est manquée, en m/s (18 : environ 6 m de haut).")]
+        public float hardLandingSpeed = 18f;
+        [Tooltip("Petit élan du pilote qui quitte la selle, même au pas, en m/s.")]
+        public float riderEjectSpeed = 1.5f;
+        [Tooltip("Part de la vitesse au choc qui soulève le pilote par-dessus le guidon : lent, il glisse de la selle ; vite, il vole.")]
+        public float riderVaultShare = 0.3f;
+        [Tooltip("Roulé-boulé du pilote éjecté à pleine vitesse, en degrés par seconde (proportionnel à la vitesse).")]
+        public float riderEjectSpin = 220f;
+        [Tooltip("Poussée qui couche la moto sans pilote du côté où elle penchait, en degrés par seconde.")]
+        public float bikeTopple = 90f;
+        [Tooltip("Recul de la moto au respawn : elle ne repart pas le nez dans le mur.")]
+        public float respawnBackOff = 1.4f;
         [Tooltip("Vitesse de la moto au respawn.")]
         public float respawnSpeed = 0f;
         [Tooltip("Efficacité du freinage pendant un wheeling (seul le frein arrière porte).")]
         public float brakeFactorDuringWheelie = 0.35f;
 
-        /// <summary>Déclenché au moment du basculement arrière, avant la remise à plat.</summary>
+        /// <summary>
+        /// Chute : le pilote quitte la selle et la moto reste à terre, jusqu'à <see cref="RequestRespawn"/>.
+        /// </summary>
         public event Action Fell;
+        /// <summary>Moto relevée et pilote rassis, après un respawn demandé par le joueur.</summary>
+        public event Action Respawned;
 
         const float GravityConstant = 9.81f;
         const float BumpNoiseSeed = 7.31f;
         const float HandlebarMaxRate = 300f;
-        const float ThrottleRate = 5f;
+        // Poignée de gaz : ouverte et refermée d'un coup de poignet, pour aller avec la reprise de la moto.
+        const float ThrottleRate = 8f;
         const float StoppieLiftFadeAngle = 6f;
+        // Part de la rotation « roue avant bloquée » transmise à la moto qui percute un mur : la fourche et
+        // le pneu encaissent le reste.
+        const float WallEndoShare = 0.35f;
+        // Inclinaison (degrés) et vitesse d'inclinaison (degrés/s) en dessous desquelles la moto est tenue
+        // pour droite au moment de la chute.
+        const float FallSideLean = 3f;
+        const float FallSideLeanRate = 10f;
+        // Sondage du sol au respawn, au-dessus de la moto couchée, et marge de la capsule au-dessus du sol.
+        const float RespawnProbeHeight = 1.5f;
+        const float RespawnClearance = 0.08f;
 
         CharacterController body;
         Transform riderHead;
@@ -298,7 +341,12 @@ namespace WheelingMoto.Gameplay
         Vector3 pivotRestPosition;
         bool isFallen;
         bool fallForward;
-        float fallTimer;
+        CrashCause crashCause;
+        // Côté où la moto part se coucher, dans le sens de l'inclinaison (+1 : penchée à gauche).
+        float fallSide = 1f;
+        RiderEjection riderEjection;
+        MotoRagdoll wreck;
+        MotoCameraRig cameraRig;
         // Après un respawn, LEVER doit être relâché : sinon un bouton resté enfoncé relancerait la chute.
         bool wheelieNeedsRelease;
 
@@ -313,7 +361,10 @@ namespace WheelingMoto.Gameplay
         bool Brake => touchBrake || keyBrake;
         float Steer => Mathf.Clamp(touchSteer + keySteer, -1f, 1f);
 
+        /// <summary>Vrai tant que le pilote est à terre : la moto attend que le joueur demande le respawn.</summary>
         public bool IsFallen => isFallen;
+        /// <summary>Ce qui a provoqué la dernière chute.</summary>
+        public CrashCause LastCrash => crashCause;
         public float SpeedKmh => Mathf.Abs(currentSpeed) * 3.6f;
         /// <summary>Vitesse en m/s, négative en marche arrière.</summary>
         public float SignedSpeed => currentSpeed;
@@ -500,6 +551,16 @@ namespace WheelingMoto.Gameplay
             riderHead.localRotation = Quaternion.identity;
 
             SpawnRider(visual);
+            // Moto rendue à la physique à la chute : montée maintenant, au repos tant qu'on roule.
+            if (visualPivot != null && visualModel != null)
+            {
+                wreck = visualPivot.gameObject.AddComponent<MotoRagdoll>();
+                wreck.Setup(visualModel, rig);
+            }
+            // La caméra passe derrière le pilote à terre à chaque chute (voir Crash).
+            cameraRig = FindAnyObjectByType<MotoCameraRig>();
+            // Compteur de prouesses : il tourne même sans HUD, l'affichage vient s'y raccrocher.
+            StuntScorer.Attach(this);
         }
 
         /// <summary>Colliders et corps rigides du modèle neutralisés : c'est le CharacterController qui porte la moto.</summary>
@@ -603,6 +664,9 @@ namespace WheelingMoto.Gameplay
                 riderAnim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             }
             rider.AddComponent<MotoRider>().Setup(this, visual.transform, riderAnim);
+            // Éjection à la chute : le pilote quitte la selle et revient s'y asseoir au respawn.
+            riderEjection = rider.AddComponent<RiderEjection>();
+            riderEjection.Setup(this, riderAnim);
         }
 
         /// <summary>Yeux de la vue 1re personne : ancrés au buste du pilote dès qu'il y en a un (voir MotoRider).</summary>
@@ -717,6 +781,8 @@ namespace WheelingMoto.Gameplay
         void Update()
         {
             float dt = Time.deltaTime;
+            // Jeu en pause : rien à simuler, et aucun raccourci (R) ne doit agir derrière le menu.
+            if (dt <= 0f) return;
             ReadKeyboard();
 
             if (isFallen)
@@ -732,6 +798,8 @@ namespace WheelingMoto.Gameplay
 
             UpdateSteering(dt);
             ApplyMovement(dt);
+            // Un mur ou une réception manquée font tomber en plein déplacement : la moto n'est plus conduite.
+            if (isFallen) return;
             UpdateWheelSpin(dt);
             UpdateGroundAlignment(dt);
             UpdateVisual();
@@ -754,13 +822,14 @@ namespace WheelingMoto.Gameplay
             ApplyPose(forkParts, forkCompression);
         }
 
-        /// <summary>Clavier pour tester sur PC : ZQSD/WASD ou flèches ; espace = LEVER.</summary>
+        /// <summary>Clavier pour tester sur PC : ZQSD/WASD ou flèches ; espace = LEVER, R = repartir après une chute.</summary>
         void ReadKeyboard()
         {
 #if ENABLE_INPUT_SYSTEM
             var kb = Keyboard.current;
             if (kb == null) return;
 
+            if (isFallen && kb.rKey.wasPressedThisFrame) RequestRespawn();
             keyThrottle = kb.wKey.isPressed || kb.zKey.isPressed || kb.upArrowKey.isPressed;
             keyBrake = kb.sKey.isPressed || kb.downArrowKey.isPressed;
             keyLift = kb.spaceKey.isPressed;
@@ -769,6 +838,7 @@ namespace WheelingMoto.Gameplay
             bool right = kb.dKey.isPressed || kb.rightArrowKey.isPressed;
             keySteer = (right ? 1f : 0f) - (left ? 1f : 0f);
 #else
+            if (isFallen && Input.GetKeyDown(KeyCode.R)) RequestRespawn();
             keyThrottle = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.Z) || Input.GetKey(KeyCode.UpArrow);
             keyBrake = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
             keyLift = Input.GetKey(KeyCode.Space);
@@ -1024,6 +1094,8 @@ namespace WheelingMoto.Gameplay
         {
             if (body.isGrounded && verticalSpeed < 0f)
             {
+                // Retour au sol : au-delà de quelques étages de chute, la suspension ne pardonne pas.
+                if (!isFallen && -verticalSpeed >= hardLandingSpeed) Crash(CrashCause.Landing);
                 verticalSpeed = -2f;
             }
             else
@@ -1042,38 +1114,132 @@ namespace WheelingMoto.Gameplay
         }
 
         /// <param name="forward">Vrai pour une chute par-dessus la roue avant, faux pour un basculement arrière.</param>
-        void TriggerFall(bool forward)
+        void TriggerFall(bool forward) => Crash(forward ? CrashCause.Stoppie : CrashCause.Wheelie);
+
+        /// <summary>
+        /// Chute : la moto est rendue à la physique avec son élan, le pilote est éjecté, et la caméra passe
+        /// derrière lui. Rien ne repart tout seul — c'est le joueur qui demande le respawn depuis le menu.
+        /// </summary>
+        void Crash(CrashCause cause)
         {
+            if (isFallen) return;
+
             isFallen = true;
-            fallForward = forward;
-            fallTimer = fallAnimationTime;
+            crashCause = cause;
+            fallForward = cause == CrashCause.Stoppie;
+            // Côté de la chute : celui où la moto penche déjà, la gravité l'y tire. Presque droite, celui où elle
+            // roulait ; parfaitement droite, à pile ou face.
+            fallSide = Mathf.Abs(currentLean) > FallSideLean ? Mathf.Sign(currentLean)
+                : Mathf.Abs(leanVelocity) > FallSideLeanRate ? Mathf.Sign(leanVelocity)
+                : (UnityEngine.Random.value < 0.5f ? -1f : 1f);
+            // Commandes relâchées : un bouton resté enfoncé ne doit rien piloter d'une moto à terre.
+            touchThrottle = touchBrake = touchLift = false;
+            touchSteer = 0f;
+
+            // Moto d'abord : le pilote a besoin de ses formes pour ne pas s'y cogner en partant.
+            ReleaseWreck(cause);
+            EjectRider(cause, currentSpeed);
+
+            // Le contrôleur, lui, reste au point de chute : c'est désormais la physique qui porte la moto.
             currentSpeed = 0f;
             wheelieAngularVelocity = 0f;
             stoppieAngularVelocity = 0f;
+            leanVelocity = 0f;
+
+            // Troisième personne sur le pilote à terre — à défaut de pilote, sur la moto.
+            if (cameraRig != null)
+            {
+                Transform focus = riderEjection != null && riderEjection.Ejected ? riderEjection.Focus
+                    : wreck != null && wreck.Free ? wreck.transform : transform;
+                cameraRig.EnterCrashView(focus);
+            }
             Fell?.Invoke();
         }
 
-        /// <summary>Court basculement visible, puis remise à plat immédiate sur place.</summary>
-        void UpdateFall(float dt)
+        /// <summary>
+        /// La moto quitte le contrôleur exactement dans l'état où elle est : même vitesse, même cabrage en
+        /// cours, même inclinaison. Rien de scripté ensuite — la physique fait le reste. S'y ajoutent le
+        /// choc lui-même contre un mur (la roue avant s'arrête, l'arrière se soulève) et, sans pilote pour
+        /// la tenir, la poussée qui la couche.
+        /// </summary>
+        void ReleaseWreck(CrashCause cause)
         {
-            if (fallForward) stoppieAngle = Mathf.MoveTowards(stoppieAngle, fallVisualAngle, fallRotateSpeed * dt);
-            else wheelieAngle = Mathf.MoveTowards(wheelieAngle, fallVisualAngle, fallRotateSpeed * dt);
-            UpdateVisual();
-            ApplyMovement(dt);
+            if (wreck == null || visualPivot == null) return;
 
-            fallTimer -= dt;
-            if (fallTimer <= 0f)
+            Vector3 right = transform.right;
+            Vector3 forward = transform.forward;
+
+            // Rotations en cours, en degrés par seconde : le cabrage lève le nez autour de l'axe droite (sens
+            // négatif), la roue avant le plonge (sens positif).
+            Vector3 spin = -right * wheelieAngularVelocity + right * stoppieAngularVelocity;
+            // Sur le côté, la moto part toujours vers fallSide, au moins à la vitesse bikeTopple. Une inclinaison
+            // qui revenait en sens inverse est ignorée : elle tiendrait la moto en équilibre au lieu de la coucher.
+            spin += forward * (fallSide * Mathf.Max(fallSide * leanVelocity, bikeTopple));
+            // Sur la roue avant, la moto tourne autour du pneu avant ; sinon autour du pneu arrière (le pivot).
+            Vector3 pivot = stoppieAngle > 0f
+                ? visualPivot.TransformPoint(new Vector3(0f, 0f, wheelbase))
+                : visualPivot.position;
+
+            if (cause == CrashCause.Wall)
             {
-                Respawn();
+                // La roue avant bute : l'arrière monte d'autant plus vite que le choc est rapide.
+                spin += right * (Mathf.Abs(currentSpeed) / Mathf.Max(0.5f, wheelbase) * Mathf.Rad2Deg * WallEndoShare);
+            }
+            Vector3 velocity = forward * currentSpeed + Vector3.up * verticalSpeed;
+            wreck.Release(velocity, spin, pivot, body);
+            if (!wreck.Free)
+            {
+                Debug.LogWarning("[MotorcycleController] La moto n'a pas pu passer en physique : repli sur la chute animée.", this);
             }
         }
 
         /// <summary>
-        /// La moto reste où elle est, remise à plat : le CharacterController n'a jamais quitté le sol
-        /// (la chute est purement visuelle), donc la caméra qui le suit n'est pas perturbée.
+        /// Le pilote part avec l'élan de la moto. Au pas, il glisse simplement de la selle ; plus le choc est
+        /// rapide, plus il est soulevé haut et plus il roule — par-dessus le guidon, ou en arrière quand le
+        /// wheeling est passé par-dessus.
         /// </summary>
-        void Respawn()
+        void EjectRider(CrashCause cause, float speed)
         {
+            if (riderEjection == null) return;
+
+            float pace = Mathf.Abs(speed);
+            float share = Mathf.Clamp01(pace / Mathf.Max(0.1f, maxSpeed));
+            bool backwards = cause == CrashCause.Wheelie;
+            float throwForward = backwards ? -1f : 1f;
+
+            Vector3 velocity = transform.forward * (speed + riderEjectSpeed * throwForward)
+                // Basculé en arrière, le pilote tombe de la selle plus qu'il ne saute.
+                + Vector3.up * (backwards ? riderEjectSpeed * 0.5f : riderEjectSpeed + pace * riderVaultShare);
+            // Roulé-boulé dans le sens de l'éjection (tourner autour de l'axe droite bascule le corps vers l'avant).
+            float roll = riderEjectSpin * Mathf.Lerp(0.2f, 1f, share);
+            Vector3 spin = transform.right * (roll * throwForward) + transform.forward * (roll * 0.3f * fallSide);
+
+            riderEjection.Eject(velocity, spin, wreck != null && wreck.Free ? wreck.Shapes : null);
+        }
+
+        /// <summary>
+        /// Pendant la chute, la moto libérée vit sa vie physique ; le contrôleur reste posé au point de chute.
+        /// Sans moto physique, repli sur l'ancien basculement visuel.
+        /// </summary>
+        void UpdateFall(float dt)
+        {
+            if (wreck == null || !wreck.Free)
+            {
+                if (fallForward) stoppieAngle = Mathf.MoveTowards(stoppieAngle, fallVisualAngle, fallRotateSpeed * dt);
+                else if (crashCause == CrashCause.Wheelie) wheelieAngle = Mathf.MoveTowards(wheelieAngle, fallVisualAngle, fallRotateSpeed * dt);
+                UpdateVisual();
+            }
+            ApplyMovement(dt);
+        }
+
+        /// <summary>
+        /// Relance la partie après une chute : la moto est relevée là où elle a fini sa course, et le pilote
+        /// se rassoit.
+        /// </summary>
+        public void RequestRespawn()
+        {
+            if (!isFallen) return;
+
             isFallen = false;
             wheelieAngle = 0f;
             wheelieAngularVelocity = 0f;
@@ -1088,14 +1254,70 @@ namespace WheelingMoto.Gameplay
             forkVelocity = 0f;
             currentSpeed = respawnSpeed;
             wheelieNeedsRelease = true;
+
+            // Où la moto a fini sa course, relevé avant de rendre la physique : ensuite le pivot rentre au bercail.
+            bool hasWreck = wreck != null && wreck.Free;
+            Vector3 wreckCenter = hasWreck ? wreck.Center : Vector3.zero;
+            Vector3 wreckForward = hasWreck ? wreck.transform.forward : Vector3.zero;
+
+            // Pilote et moto quittent la physique avant de sonder la place : leurs formes fausseraient la mesure.
+            if (riderEjection != null) riderEjection.ReturnToSeat();
+            if (wreck != null) wreck.Restore();
+            if (hasWreck) MoveToWreck(wreckCenter, wreckForward);
+
+            // Nez dans le mur : la moto recule d'une longueur pour avoir de quoi repartir.
+            if (crashCause == CrashCause.Wall && respawnBackOff > 0f)
+            {
+                body.Move(-transform.forward * respawnBackOff);
+            }
+
+            if (cameraRig != null) cameraRig.ExitCrashView();
             UpdateVisual();
+            Respawned?.Invoke();
+        }
+
+        /// <summary>
+        /// Moto remise debout là où elle gît, dans le sens où elle pointe — si le sol est tout près et la
+        /// place libre. Sinon (tombée d'un pont, coincée contre un mur), elle repart du point de chute, sûr
+        /// par construction.
+        /// </summary>
+        void MoveToWreck(Vector3 center, Vector3 wreckForward)
+        {
+            Vector3 heading = Vector3.ProjectOnPlane(wreckForward, Vector3.up);
+            // Plantée sur le nez ou la queue, la moto n'indique plus de direction : on garde celle de la chute.
+            float yaw = heading.sqrMagnitude > 0.1f ? Quaternion.LookRotation(heading).eulerAngles.y : transform.eulerAngles.y;
+
+            body.enabled = false;
+            bool placed = false;
+            if (Physics.Raycast(center + Vector3.up * RespawnProbeHeight, Vector3.down, out RaycastHit ground,
+                    RespawnProbeHeight + 2.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+                && Vector3.Angle(ground.normal, Vector3.up) < maxClimbSlope)
+            {
+                float lift = RespawnClearance + colliderRadius;
+                Vector3 bottom = ground.point + Vector3.up * lift;
+                Vector3 top = ground.point + Vector3.up * Mathf.Max(lift, colliderHeight - colliderRadius);
+                if (!Physics.CheckCapsule(bottom, top, colliderRadius, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                {
+                    transform.SetPositionAndRotation(ground.point + Vector3.up * 0.05f, Quaternion.Euler(0f, yaw, 0f));
+                    heightInitialized = false;
+                    placed = true;
+                }
+            }
+            body.enabled = true;
+
+            if (!placed)
+            {
+                Debug.Log("[MotorcycleController] Pas de place là où la moto est tombée : respawn au point de chute.", this);
+            }
         }
 
         void UpdateVisual()
         {
             // Recalculée à chaque frame : les réglages du pilote se testent en jeu, sans relancer.
             if (riderHead != null) riderHead.localPosition = RiderEyePosition();
-            if (visualPivot == null) return;
+            // Moto à terre, menée par la physique : son pivot est détaché, sa pose locale est une pose dans le
+            // monde. L'écrire ici la téléporterait à l'origine de la scène.
+            if (visualPivot == null || (wreck != null && wreck.Free)) return;
             // Pivot posé sur le sol sous le pneu arrière, et hauteur lissée : les à-coups du contrôleur disparaissent.
             float heightLag = heightInitialized ? smoothedHeight - transform.position.y : 0f;
             Vector3 rest = pivotRestPosition + Vector3.up * (rearGroundOffset + heightLag);
@@ -1283,22 +1505,33 @@ namespace WheelingMoto.Gameplay
                 colliderRadius + overhang + travel, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
 
             float nearest = float.MaxValue;
+            Vector3 wallNormal = -transform.forward * sign;
             for (int i = 0; i < count; i++)
             {
                 RaycastHit hit = probeHits[i];
                 if (hit.collider == body || hit.distance <= 0f) continue;
                 // Une pente gravissable n'est pas un mur.
                 if (Vector3.Angle(hit.normal, Vector3.up) < maxClimbSlope) continue;
-                nearest = Mathf.Min(nearest, hit.distance);
+                if (hit.distance >= nearest) continue;
+                nearest = hit.distance;
+                wallNormal = hit.normal;
             }
             if (nearest == float.MaxValue) return;
 
             float free = Mathf.Max(0f, nearest - colliderRadius - overhang);
-            if (free < travel)
+            if (free >= travel) return;
+
+            // Pris de plein fouet, le mur envoie le pilote par-dessus le guidon ; au pas, la moto vient
+            // simplement buter contre lui au lieu de le traverser ou de monter dessus. Seule compte la vitesse
+            // dirigée vers le mur : en biais, on le frotte, on ne le percute pas.
+            Vector3 facing = Vector3.ProjectOnPlane(-wallNormal, Vector3.up).normalized;
+            float impactSpeed = Mathf.Abs(currentSpeed) * Mathf.Max(0f, Vector3.Dot(transform.forward * sign, facing));
+            if (!isFallen && impactSpeed >= wallCrashSpeed)
             {
-                // Contact : la moto s'arrête contre le mur au lieu de le traverser ou de monter dessus.
-                currentSpeed = free <= 0.01f ? 0f : sign * free / Mathf.Max(dt, 0.0001f);
+                Crash(CrashCause.Wall);
+                return;
             }
+            currentSpeed = free <= 0.01f ? 0f : sign * free / Mathf.Max(dt, 0.0001f);
         }
 
         /// <summary>Tour de roue : distance parcourue divisée par le rayon réel.</summary>

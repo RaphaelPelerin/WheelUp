@@ -68,18 +68,21 @@ namespace WheelingMoto.UI
             var canvas = UIFactory.CreateRootCanvas("MainCanvas");
             var root = canvas.transform;
 
+            // Le fond couvre tout l'écran, encoche comprise ; le reste vit dans la zone sûre, sans quoi la
+            // barre latérale et le badge de pièces passent sous l'encoche et les coins arrondis du téléphone.
             UIFactory.AddPanel(root, "Background", theme.Background, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var safeArea = UIFactory.CreateSafeArea(root);
 
-            var sidebar = UIFactory.AddPanel(root, "Sidebar", theme.SidebarBackground,
+            var sidebar = UIFactory.AddPanel(safeArea, "Sidebar", theme.SidebarBackground,
                 new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, new Vector2(SidebarWidth, 0));
             sidebarObject = sidebar.gameObject;
 
             BuildLogo(sidebar.transform);
             BuildNavItems(sidebar.transform);
-            BuildCoinPill(root);
+            BuildCoinPill(safeArea);
 
             // Marge haute réservée au badge de pièces, marge basse pour ne pas coller au bord.
-            var content = UIFactory.AddPanel(root, "Content", Color.clear,
+            var content = UIFactory.AddPanel(safeArea, "Content", Color.clear,
                 new Vector2(0, 0), new Vector2(1, 1), new Vector2(SidebarWidth, 40), new Vector2(0, -110));
             contentObject = content.gameObject;
             var contentArea = content.rectTransform;
