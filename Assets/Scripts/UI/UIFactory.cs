@@ -174,6 +174,22 @@ namespace WheelingMoto.UI
 #endif
         }
 
+        /// <summary>
+        /// Conteneur plein cadre replié sur la zone sûre de l'écran : il écarte la Dynamic Island,
+        /// l'indicateur d'accueil et les coins arrondis de l'iPhone. Les éléments à lire ou à toucher
+        /// s'y placent ; les aplats de fond restent en dehors, sur le canvas, pour couvrir la dalle
+        /// jusqu'aux bords. Sur un écran rectangulaire sans découpe, il couvre tout, au retrait des
+        /// coins près.
+        /// </summary>
+        public static SafeArea AddSafeArea(Transform parent, string name, float cornerInset = SafeArea.DefaultCornerInset)
+        {
+            var rt = CreateUIObject(name, parent);
+            SetRect(rt, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var area = rt.gameObject.AddComponent<SafeArea>();
+            area.CornerInset = cornerInset;
+            return area;
+        }
+
         public static RectTransform CreateUIObject(string name, Transform parent)
         {
             var go = new GameObject(name, typeof(RectTransform));
@@ -274,6 +290,22 @@ namespace WheelingMoto.UI
         }
 
         /// <summary>
+        /// Pastille « i ». Elle porte le texte long que les écrans n'affichent plus en petit et
+        /// l'ouvre en plein écran. Le composant retourné expose Title et Body : un écran dont
+        /// l'information change en cours de route n'a qu'à les réaffecter.
+        /// </summary>
+        public static InfoButton AddInfoButton(Transform parent, string name, UITheme theme, string title, string body,
+            Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            var button = AddButton(parent, name, "i", theme.PanelAlt, theme.Text, UITheme.FontBody,
+                anchorMin, anchorMax, offsetMin, offsetMax, null);
+
+            var info = InfoButton.Attach(button.gameObject, theme, title, body);
+            button.onClick.AddListener(info.Open);
+            return info;
+        }
+
+        /// <summary>
         /// Zone défilante verticale. Retourne le conteneur dans lequel empiler les éléments, ancré en haut :
         /// les enfants se positionnent avec des Y négatifs, comme dans un panneau classique.
         /// </summary>
@@ -282,6 +314,14 @@ namespace WheelingMoto.UI
             var viewport = CreateUIObject(name, parent);
             SetRect(viewport, anchorMin, anchorMax, offsetMin, offsetMax);
             viewport.gameObject.AddComponent<RectMask2D>();
+
+            // Surface invisible mais bien cible de raycast. Sans elle, le glissement ne part que des
+            // éléments cliquables du contenu : une liste de cartes décoratives (raycastTarget éteint,
+            // comme le veut le reste du projet) ne défilait pas du tout, le doigt ne rencontrant rien
+            // qui puisse transmettre le geste au ScrollRect.
+            var surface = viewport.gameObject.AddComponent<Image>();
+            surface.color = Color.clear;
+            surface.raycastTarget = true;
 
             var content = CreateUIObject("Content", viewport);
             content.anchorMin = new Vector2(0f, 1f);
@@ -307,11 +347,11 @@ namespace WheelingMoto.UI
             var row = CreateUIObject(name, parent);
             SetRect(row, anchorMin, anchorMax, offsetMin, offsetMax);
 
-            AddText(row, "Label", label, 15, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, new Vector2(150, 0));
+            AddText(row, "Label", label, UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, new Vector2(186, 0));
 
             var track = AddPanel(row, "Track", theme.PanelAlt,
-                new Vector2(0, 0.5f), new Vector2(1, 0.5f), new Vector2(158, -8), new Vector2(0, 8), rounded: true);
+                new Vector2(0, 0.5f), new Vector2(1, 0.5f), new Vector2(194, -8), new Vector2(0, 8), rounded: true);
             track.raycastTarget = false;
 
             var fill = AddPanel(track.transform, "Fill", theme.Accent,
@@ -369,7 +409,7 @@ namespace WheelingMoto.UI
             widget.PrevButton = AddButton(rt, "Prev", "-", theme.PanelAlt, theme.Text, 26,
                 new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, new Vector2(64, 0), onPrev);
 
-            widget.Label = AddText(rt, "Label", "", 20, theme.Text, TextAnchor.MiddleCenter,
+            widget.Label = AddText(rt, "Label", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleCenter,
                 new Vector2(0, 0), new Vector2(1, 1), new Vector2(70, 0), new Vector2(-70, 0));
 
             widget.NextButton = AddButton(rt, "Next", "+", theme.PanelAlt, theme.Text, 26,
@@ -378,10 +418,38 @@ namespace WheelingMoto.UI
             return widget;
         }
 
+        /// <summary>Chemin du logo dans Resources, partagé par les écrans qui l'affichent.</summary>
+        public const string LogoResourcePath = "Branding/WheelUpLogo";
+
+        /// <summary>
+        /// Pose le logo de la marque dans le cadre donné, sans le déformer : le dessin est large,
+        /// les cadres qui l'accueillent ne le sont pas tous. Retourne null si l'image manque, à
+        /// charge de l'appelant d'afficher son propre repli.
+        /// </summary>
+        public static Image AddBrandLogo(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            var sprite = Resources.Load<Sprite>(LogoResourcePath);
+            if (sprite == null) return null;
+
+            var rt = CreateUIObject(name, parent);
+            SetRect(rt, anchorMin, anchorMax, offsetMin, offsetMax);
+
+            var image = rt.gameObject.AddComponent<Image>();
+            image.sprite = sprite;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            return image;
+        }
+
         /// <summary>
         /// Item de navigation façon barre latérale : pas de fond plein, juste un libellé et une barre
-        /// d'indicateur à gauche qui s'active quand l'item est sélectionné. locked=true grise l'item,
-        /// le rend non cliquable et ajoute une étiquette "BIENTÔT".
+        /// d'indicateur qui s'active quand l'item est sélectionné. locked=true grise l'item, le rend non
+        /// cliquable et ajoute une étiquette "BIENTÔT".
+        ///
+        /// Libellé et indicateur sont alignés à droite de la ligne : la barre latérale occupe le bord
+        /// gauche de l'écran, où la Dynamic Island vient mordre en paysage. Tout ce qui se lit est donc
+        /// poussé du côté opposé à la découpe, et l'étiquette "BIENTÔT" passe à gauche pour lui
+        /// laisser la place.
         /// </summary>
         public static NavItemWidget AddNavItem(Transform parent, string name, string label, UITheme theme, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax, UnityAction onClick, bool locked = false)
         {
@@ -402,21 +470,42 @@ namespace WheelingMoto.UI
             }
             widget.Button = btn;
 
-            widget.Indicator = AddPanel(rt, "Indicator", theme.Accent, new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, new Vector2(5, 0));
+            widget.Indicator = AddPanel(rt, "Indicator", theme.Accent, new Vector2(1, 0), new Vector2(1, 1), new Vector2(-5, 0), Vector2.zero);
             widget.Indicator.raycastTarget = false;
             widget.Indicator.gameObject.SetActive(false);
 
             widget.Label = AddText(rt, "Label", label, 26, locked ? theme.NavTextLocked : theme.NavTextInactive,
-                TextAnchor.MiddleLeft, Vector2.zero, Vector2.one, new Vector2(30, 0), new Vector2(-20, 0),
+                TextAnchor.MiddleRight, Vector2.zero, Vector2.one, new Vector2(20, 0), new Vector2(-30, 0),
                 FontStyles.Bold | FontStyles.Italic);
+
+            // L'étiquette "BIENTÔT" et la pastille de notification se posent toutes deux juste à
+            // gauche du libellé, dont la largeur est mesurée ici : le libellé étant calé à droite,
+            // une position fixe les laisserait flotter seules à l'autre bout de la ligne.
+            widget.Label.ForceMeshUpdate();
+            float labelWidth = widget.Label.preferredWidth;
+            if (labelWidth <= 1f) labelWidth = 150f;
+            float slotRight = -(30f + labelWidth + 18f);
 
             if (locked)
             {
                 var tag = AddPanel(rt, "SoonTag", theme.PanelAlt, new Vector2(1, 0.5f), new Vector2(1, 0.5f),
-                    new Vector2(-104, -16), new Vector2(-24, 16), rounded: true);
+                    new Vector2(slotRight - 150f, -22), new Vector2(slotRight, 22), rounded: true);
                 tag.raycastTarget = false;
-                AddText(tag.transform, "SoonLabel", "BIENTÔT", 12, theme.NavTextLocked, TextAnchor.MiddleCenter,
+                AddText(tag.transform, "SoonLabel", "BIENTÔT", UITheme.FontLabel, theme.NavTextLocked, TextAnchor.MiddleCenter,
                     Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, FontStyles.Bold);
+            }
+            else
+            {
+                // Créée pour tous les onglets ouverts, allumée par celui qui en a l'usage : la
+                // barre n'a pas à savoir lesquels peuvent notifier.
+                var badge = AddPanel(rt, "Badge", theme.Accent, new Vector2(1, 0.5f), new Vector2(1, 0.5f),
+                    new Vector2(slotRight - 44f, -22), new Vector2(slotRight, 22), rounded: true);
+                badge.raycastTarget = false;
+
+                widget.Badge = badge.gameObject;
+                widget.BadgeLabel = AddText(badge.transform, "BadgeLabel", "", UITheme.FontLabel, Color.white,
+                    TextAnchor.MiddleCenter, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, FontStyles.Bold);
+                badge.gameObject.SetActive(false);
             }
 
             return widget;

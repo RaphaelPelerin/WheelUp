@@ -6,19 +6,35 @@ using UnityEngine.UI;
 namespace WheelingMoto.UI
 {
     /// <summary>
-    /// Une carte de boutique : visuel en tête, nom, description, mention en petit, puis le bouton
-    /// d'achat calé en bas. Les champs sont exposés pour que chaque onglet remplisse la zone
-    /// d'aperçu à sa façon — rendu 3D pour un coffre, pastille pour un lot de pièces.
+    /// Une carte de boutique : visuel en tête, nom, pastille « i », puis le bouton d'achat calé en
+    /// bas. Les champs sont exposés pour que chaque onglet remplisse la zone d'aperçu à sa façon —
+    /// rendu 3D pour un coffre, pastille pour un lot de pièces.
+    ///
+    /// La description et la mention ne sont plus écrites sur la carte : à cette largeur, il aurait
+    /// fallu les composer en corps 14 ou 15. Elles partent dans la page du bouton « i », où elles
+    /// tiennent en gros, et la place ainsi libérée revient à l'aperçu.
     /// </summary>
     public class StorefrontCard
     {
         public Image Panel;
         public RectTransform Preview;
         public TextMeshProUGUI Name;
-        public TextMeshProUGUI Description;
-        public TextMeshProUGUI Note;
+        public InfoButton Info;
         public Button Action;
         public TextMeshProUGUI ActionLabel;
+
+        /// <summary>
+        /// Compose la page d'information. Appelée à la construction, puis chaque fois qu'un écran
+        /// change ce qu'il a à dire — les chances d'un coffre, l'état d'un achat déjà effectué.
+        /// </summary>
+        public void SetInfo(string description, string note)
+        {
+            if (Info == null) return;
+
+            if (string.IsNullOrEmpty(note)) Info.Body = description;
+            else if (string.IsNullOrEmpty(description)) Info.Body = note;
+            else Info.Body = description + "\n\n" + note;
+        }
     }
 
     /// <summary>
@@ -40,15 +56,12 @@ namespace WheelingMoto.UI
 
         const float CardPadding = 22f;
         const float ButtonBottom = 18f;
-        const float ButtonHeight = 56f;
-        const float NoteHeight = 100f;          // cinq lignes de mention en corps 14
-        const float DescriptionHeight = 46f;    // deux lignes
-        const float NameHeight = 34f;
+        const float ButtonHeight = 64f;         // le libellé est passé en corps 22
+        const float NameHeight = 44f;           // une ligne en corps 28
+        const float InfoSize = 56f;
 
         const float ButtonTop = ButtonBottom + ButtonHeight;
-        const float NoteBottom = ButtonTop + 18f;
-        const float DescriptionBottom = NoteBottom + NoteHeight + 10f;
-        const float NameBottom = DescriptionBottom + DescriptionHeight + 8f;
+        const float NameBottom = ButtonTop + 16f;
 
         /// <summary>Hauteur réservée au bloc de texte : l'aperçu commence juste au-dessus.</summary>
         public const float PreviewBottom = NameBottom + NameHeight + 14f;
@@ -57,11 +70,11 @@ namespace WheelingMoto.UI
         public static void BuildHeader(Transform root, UITheme theme, string title, string subtitle)
         {
             // Le solde n'est affiché qu'une fois, dans le badge permanent en haut à droite du menu.
-            UIFactory.AddText(root, "Title", title, 30, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(30, -50), new Vector2(-30, -6));
+            UIFactory.AddText(root, "Title", title, UITheme.FontTitle, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(30, -56), new Vector2(-30, -6));
 
-            UIFactory.AddText(root, "Subtitle", subtitle, 16, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(30, -84), new Vector2(-30, -58));
+            UIFactory.AddText(root, "Subtitle", subtitle, UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(30, -98), new Vector2(-30, -58));
         }
 
         /// <summary>
@@ -92,34 +105,35 @@ namespace WheelingMoto.UI
             UIFactory.SetRect(preview, Vector2.zero, Vector2.one,
                 new Vector2(18, PreviewBottom), new Vector2(-18, -18));
 
-            var nameText = UIFactory.AddText(panel.transform, "Name", name, 24, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 0), new Vector2(1, 0),
-                new Vector2(CardPadding, NameBottom), new Vector2(-CardPadding, NameBottom + NameHeight),
+            // Le nom s'arrête avant la pastille : sans cette réserve, un nom long passerait dessous.
+            var nameText = UIFactory.AddText(panel.transform, "Name", name, UITheme.FontHeading, theme.Text,
+                TextAnchor.MiddleLeft, new Vector2(0, 0), new Vector2(1, 0),
+                new Vector2(CardPadding, NameBottom),
+                new Vector2(-CardPadding - InfoSize - 12f, NameBottom + NameHeight),
                 FontStyles.Bold | FontStyles.Italic);
 
-            var descriptionText = UIFactory.AddText(panel.transform, "Description", description, 15, theme.TextMuted,
-                TextAnchor.LowerLeft, new Vector2(0, 0), new Vector2(1, 0),
-                new Vector2(CardPadding, DescriptionBottom), new Vector2(-CardPadding, DescriptionBottom + DescriptionHeight));
+            float infoCenter = NameBottom + NameHeight * 0.5f;
+            var info = UIFactory.AddInfoButton(panel.transform, "Info", theme, name, string.Empty,
+                new Vector2(1, 0), new Vector2(1, 0),
+                new Vector2(-CardPadding - InfoSize, infoCenter - InfoSize * 0.5f),
+                new Vector2(-CardPadding, infoCenter + InfoSize * 0.5f));
 
-            var noteText = UIFactory.AddText(panel.transform, "Note", note, 14, theme.NavTextInactive,
-                TextAnchor.LowerLeft, new Vector2(0, 0), new Vector2(1, 0),
-                new Vector2(CardPadding, NoteBottom), new Vector2(-CardPadding, NoteBottom + NoteHeight));
-
-            var button = UIFactory.AddButton(panel.transform, "Action", actionText, theme.Accent, Color.white, 18,
-                new Vector2(0, 0), new Vector2(1, 0),
+            var button = UIFactory.AddButton(panel.transform, "Action", actionText, theme.Accent, Color.white,
+                UITheme.FontLabel, new Vector2(0, 0), new Vector2(1, 0),
                 new Vector2(18, ButtonBottom), new Vector2(-18, ButtonTop),
                 onAction, ButtonKind.Primary);
 
-            return new StorefrontCard
+            var card = new StorefrontCard
             {
                 Panel = panel,
                 Preview = preview,
                 Name = nameText,
-                Description = descriptionText,
-                Note = noteText,
+                Info = info,
                 Action = button,
                 ActionLabel = button.GetComponentInChildren<TextMeshProUGUI>(),
             };
+            card.SetInfo(description, note);
+            return card;
         }
 
         /// <summary>

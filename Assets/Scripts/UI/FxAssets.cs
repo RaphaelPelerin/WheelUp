@@ -15,6 +15,7 @@ namespace WheelingMoto.UI
         static Texture2D chipTexture;
         static Mesh quadMesh;
         static Sprite glowSprite;
+        static Sprite chevronSprite;
         static Material dotMaterial;
         static Material ringMaterial;
         static Material chipMaterial;
@@ -62,6 +63,80 @@ namespace WheelingMoto.UI
                 }
                 return glowSprite;
             }
+        }
+
+        /// <summary>
+        /// Chevron pointant vers la droite, pour les flèches du carrousel de cartes. Dessiné plutôt
+        /// qu'écrit : les glyphes « ◀ » et « ▶ » dépendent de la police, sortent à une taille qu'on
+        /// ne maîtrise pas et manquent purement et simplement dans certains atlas TextMeshPro.
+        ///
+        /// Pour la flèche de gauche, retourner le RectTransform en x : une seule texture suffit.
+        /// </summary>
+        public static Sprite Chevron
+        {
+            get
+            {
+                if (chevronSprite == null)
+                {
+                    var texture = ChevronTexture(128);
+                    chevronSprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+                    chevronSprite.name = "Chevron";
+                }
+                return chevronSprite;
+            }
+        }
+
+        /// <summary>
+        /// Trace le chevron à partir de la distance au trait plutôt qu'en remplissant un polygone :
+        /// l'épaisseur est constante jusque dans la pointe, les bords sont lissés sur un pixel, et
+        /// les extrémités sont naturellement arrondies.
+        /// </summary>
+        static Texture2D ChevronTexture(int size)
+        {
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear,
+                name = "FxChevron",
+            };
+
+            // Sommets du « > » en coordonnées normalisées, la pointe vers la droite. Le trait reste
+            // en retrait des bords pour que son arrondi et son lissage ne soient pas coupés.
+            var top = new Vector2(-0.34f, 0.56f);
+            var tip = new Vector2(0.36f, 0f);
+            var bottom = new Vector2(-0.34f, -0.56f);
+
+            const float halfThickness = 0.155f;
+            float feather = 2f / size;
+
+            var pixels = new Color32[size * size];
+            float half = (size - 1) * 0.5f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    var p = new Vector2((x - half) / half, (y - half) / half);
+                    float distance = Mathf.Min(DistanceToSegment(p, top, tip), DistanceToSegment(p, tip, bottom));
+                    float alpha = Mathf.Clamp01((halfThickness - distance) / feather);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            return texture;
+        }
+
+        static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float lengthSquared = ab.sqrMagnitude;
+            if (lengthSquared <= Mathf.Epsilon) return Vector2.Distance(point, a);
+
+            float t = Mathf.Clamp01(Vector2.Dot(point - a, ab) / lengthSquared);
+            return Vector2.Distance(point, a + ab * t);
         }
 
         /// <summary>

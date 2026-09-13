@@ -33,6 +33,11 @@ namespace WheelingMoto.UI
         TextMeshProUGUI ownedStateText;
         Button buyButton;
 
+        // Achat et équipement se relaient dans le même emplacement : une moto est soit à acheter,
+        // soit à enfourcher, jamais les deux, et le bas de la fiche ne bouge pas d'une moto à l'autre.
+        Button equipButton;
+        TextMeshProUGUI equipLabel;
+
         MotoPreview preview;
         TextMeshProUGUI previewMissingText;
 
@@ -58,7 +63,7 @@ namespace WheelingMoto.UI
         const float SwatchBorder = 4f;   // liseré laissé visible par le cadre de sélection
         const float SwatchGap = 3f;
         const float TabHeight = 46f;
-        const float LabelHeight = 24f;
+        const float LabelHeight = 32f;
         const float SwatchGridBottom = 24f;
 
         static int SwatchRowCount => Mathf.CeilToInt(MotoCustomization.Palette.Length / (float)SwatchesPerRow);
@@ -106,11 +111,11 @@ namespace WheelingMoto.UI
                     new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, yTop - RowHeight), new Vector2(0, yTop),
                     () => SelectMoto(moto.Name));
 
-                UIFactory.AddText(btn.transform, "Name", moto.Name, 20, theme.Text, TextAnchor.UpperLeft,
-                    Vector2.zero, Vector2.one, new Vector2(18, -50), new Vector2(-18, -10));
+                UIFactory.AddText(btn.transform, "Name", moto.Name, UITheme.FontBody, theme.Text, TextAnchor.UpperLeft,
+                    Vector2.zero, Vector2.one, new Vector2(18, -56), new Vector2(-18, -10));
 
-                UIFactory.AddText(btn.transform, "Category", moto.Category, 15, theme.TextMuted, TextAnchor.LowerLeft,
-                    Vector2.zero, Vector2.one, new Vector2(18, 10), new Vector2(-18, 46));
+                UIFactory.AddText(btn.transform, "Category", moto.Category, UITheme.FontLabel, theme.TextMuted, TextAnchor.LowerLeft,
+                    Vector2.zero, Vector2.one, new Vector2(18, 12), new Vector2(-18, 50));
 
                 motoButtons[moto.Name] = btn;
             }
@@ -121,7 +126,7 @@ namespace WheelingMoto.UI
             var previewImage = UIFactory.AddRawImage(showcase, "MotoPreview",
                 new Vector2(0, 0), new Vector2(1, 1), new Vector2(20, PaintSectionHeight), new Vector2(-20, -16));
 
-            previewMissingText = UIFactory.AddText(showcase, "PreviewMissing", "Modèle 3D à venir", 16,
+            previewMissingText = UIFactory.AddText(showcase, "PreviewMissing", "Modèle 3D à venir", UITheme.FontLabel,
                 theme.NavTextInactive, TextAnchor.MiddleCenter,
                 new Vector2(0, 0), new Vector2(1, 1), new Vector2(20, PaintSectionHeight), new Vector2(-20, -16));
 
@@ -133,7 +138,7 @@ namespace WheelingMoto.UI
         /// <summary>Sélecteur de zone à peindre et nuancier, appliqués en direct sur l'aperçu 3D.</summary>
         void BuildPaintSection(Transform showcase)
         {
-            UIFactory.AddText(showcase, "PaintLabel", "Peinture", 18, theme.TextMuted, TextAnchor.MiddleLeft,
+            UIFactory.AddText(showcase, "PaintLabel", "Peinture", UITheme.FontBody, theme.TextMuted, TextAnchor.MiddleLeft,
                 new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, LabelBottom), new Vector2(-20, LabelBottom + LabelHeight));
 
             var parts = MotoCustomization.Parts;
@@ -208,7 +213,7 @@ namespace WheelingMoto.UI
                 float xMax = (float)(i - from + 1) / count;
 
                 partButtons[i] = UIFactory.AddButton(row.transform, "Part_" + part.Id, part.Label,
-                    theme.PanelAlt, theme.Text, 15,
+                    theme.PanelAlt, theme.Text, UITheme.FontLabel,
                     new Vector2(xMin, 0), new Vector2(xMax, 1), new Vector2(4, 0), new Vector2(-4, 0),
                     () => SelectPart(part.Id));
             }
@@ -216,14 +221,14 @@ namespace WheelingMoto.UI
 
         void BuildDetail(Transform detail)
         {
-            detailNameText = UIFactory.AddText(detail, "DetailName", "", 24, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -60), new Vector2(-24, -16));
+            detailNameText = UIFactory.AddText(detail, "DetailName", "", UITheme.FontHeading, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -62), new Vector2(-24, -14));
 
-            ownedStateText = UIFactory.AddText(detail, "OwnedState", "", 17, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -94), new Vector2(-24, -64));
+            ownedStateText = UIFactory.AddText(detail, "OwnedState", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -98), new Vector2(-24, -64));
 
-            UIFactory.AddText(detail, "StatsLabel", "Performances", 18, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -130), new Vector2(-24, -106));
+            UIFactory.AddText(detail, "StatsLabel", "Performances", UITheme.FontBody, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -136), new Vector2(-24, -102));
 
             powerBar = UIFactory.AddStatBar(detail, "PowerBar", "Puissance", theme,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -166), new Vector2(-24, -136));
@@ -232,17 +237,23 @@ namespace WheelingMoto.UI
             wheelieBar = UIFactory.AddStatBar(detail, "WheelieBar", "Cabrage", theme,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -238), new Vector2(-24, -208));
 
-            UIFactory.AddText(detail, "UpgradesLabel", "Améliorations", 18, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -276), new Vector2(-24, -252));
+            UIFactory.AddText(detail, "UpgradesLabel", "Améliorations", UITheme.FontBody, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -282), new Vector2(-24, -248));
 
             for (int i = 0; i < MotoUpgrades.Slots.Length; i++)
             {
                 BuildUpgradeRow(detail, MotoUpgrades.Slots[i], -288 - i * 84);
             }
 
-            buyButton = UIFactory.AddButton(detail, "BuyButton", "ACHETER LA MOTO", theme.Accent, Color.white, 20,
+            buyButton = UIFactory.AddButton(detail, "BuyButton", "ACHETER LA MOTO", theme.Accent, Color.white, UITheme.FontLabel,
                 new Vector2(0, 0), new Vector2(1, 0), new Vector2(24, 30), new Vector2(-24, 96), OnBuyPressed,
                 ButtonKind.Primary);
+
+            equipButton = UIFactory.AddButton(detail, "EquipButton", "UTILISER CETTE MOTO", theme.Accent, Color.white,
+                UITheme.FontLabel, new Vector2(0, 0), new Vector2(1, 0), new Vector2(24, 30), new Vector2(-24, 96),
+                OnEquipPressed, ButtonKind.Primary);
+
+            equipLabel = equipButton.GetComponentInChildren<TextMeshProUGUI>();
         }
 
         void BuildUpgradeRow(Transform detail, UpgradeSlot slot, float yTop)
@@ -251,15 +262,15 @@ namespace WheelingMoto.UI
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, yTop - 76), new Vector2(-24, yTop), rounded: true);
             row.raycastTarget = false;
 
-            UIFactory.AddText(row.transform, "Label", slot.Label, 17, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 0.5f), new Vector2(0.6f, 1), new Vector2(16, 0), new Vector2(0, -8));
+            UIFactory.AddText(row.transform, "Label", slot.Label, UITheme.FontLabel, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0, 0.5f), new Vector2(0.6f, 1), new Vector2(16, 0), new Vector2(0, -4));
 
-            var levelText = UIFactory.AddText(row.transform, "Level", "", 14, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0, 0), new Vector2(0.6f, 0.5f), new Vector2(16, 8), new Vector2(0, 0));
+            var levelText = UIFactory.AddText(row.transform, "Level", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 0), new Vector2(0.6f, 0.5f), new Vector2(16, 4), new Vector2(0, 0));
 
             // Libellé non vide obligatoire : AddButton ne crée l'enfant texte que dans ce cas,
             // et c'est lui qui portera ensuite le coût de l'amélioration.
-            var button = UIFactory.AddButton(row.transform, "Buy", "-", theme.Accent, Color.white, 16,
+            var button = UIFactory.AddButton(row.transform, "Buy", "-", theme.Accent, Color.white, UITheme.FontLabel,
                 new Vector2(0.6f, 0), new Vector2(1, 1), new Vector2(8, 10), new Vector2(-12, -10),
                 () => OnUpgradePressed(slot));
 
@@ -298,9 +309,23 @@ namespace WheelingMoto.UI
 
             bool owned = IsOwned(moto);
 
+            bool equipped = Loadout.IsSelected(moto);
+
             detailNameText.text = moto.Name;
-            ownedStateText.text = owned ? "Moto possédée" : $"Prix : {moto.Price} pièces";
+            ownedStateText.text = !owned ? $"Prix : {moto.Price} pièces"
+                : equipped ? "Moto équipée" : "Moto possédée";
+
             buyButton.gameObject.SetActive(!owned);
+            equipButton.gameObject.SetActive(owned);
+
+            if (owned)
+            {
+                // Déjà équipée : le bouton reste en place, éteint, pour dire laquelle est en service
+                // plutôt que de disparaître et laisser un trou au bas de la fiche.
+                equipButton.interactable = !equipped;
+                equipLabel.text = equipped ? "MOTO ACTUELLE" : "UTILISER CETTE MOTO";
+                UIFactory.SetButtonColor(equipButton, equipped ? theme.PanelAlt : theme.Accent);
+            }
 
             var stats = MotoStats.For(moto);
             powerBar.fillAmount = stats.Power / MotoStats.MaxValue;
@@ -376,8 +401,22 @@ namespace WheelingMoto.UI
             if (EconomyManager.SpendCoins(moto.Price))
             {
                 GarageOwnership.SetOwned(moto.Name);
+                MissionTracker.ReportEvent(MissionMetric.MotoBought);
                 RefreshDetail();
             }
+        }
+
+        /// <summary>
+        /// Équipe la moto affichée. Acheter ne l'équipe pas d'office : le joueur peut vouloir garder
+        /// la sienne et n'ajouter la nouvelle qu'à sa collection, et lui imposer le changement
+        /// reviendrait à décider pour lui de ce qu'il emmène en piste.
+        /// </summary>
+        void OnEquipPressed()
+        {
+            var moto = CurrentMoto();
+            if (moto == null) return;
+
+            if (Loadout.Select(moto)) RefreshDetail();
         }
 
         void OnUpgradePressed(UpgradeSlot slot)
@@ -391,6 +430,7 @@ namespace WheelingMoto.UI
             if (!EconomyManager.SpendCoins(MotoUpgrades.CostForLevel(moto, level + 1))) return;
 
             GarageOwnership.SetUpgradeLevel(moto.Name, slot.Id, level + 1);
+            MissionTracker.ReportEvent(MissionMetric.UpgradeBought);
             RefreshDetail();
         }
     }

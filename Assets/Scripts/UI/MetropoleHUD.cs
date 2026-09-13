@@ -34,10 +34,10 @@ namespace WheelingMoto.UI
         const string WheelieFallHint = "Dose LEVER et FREIN pour rester dans la zone verte";
         const string StoppieFallHint = "Roue avant : relâche FREIN avant la zone rouge, rien ne te rattrape au-delà";
 
-        // Boutons translucides : la route reste visible sous les pouces. À l'appui, le fond passe à
-        // l'orange du thème, l'assombrissement par défaut du Button ne se verrait pas sur ce fond.
-        static readonly Color ControlColor = new Color(0.17f, 0.18f, 0.22f, 0.3f);
-        static readonly Color ControlPressedColor = new Color(0.96f, 0.36f, 0.13f, 0.5f);
+        // Boutons translucides : la route reste visible sous les pouces. À l'appui, le fond passe au
+        // rouge de la marque, l'assombrissement par défaut du Button ne se verrait pas sur ce fond.
+        static readonly Color ControlColor = new Color(0.19f, 0.19f, 0.2f, 0.3f);
+        static readonly Color ControlPressedColor = new Color(UITheme.Brand.r, UITheme.Brand.g, UITheme.Brand.b, 0.5f);
         static readonly Color ControlTextColor = new Color(1f, 1f, 1f, 0.85f);
         static readonly Color JoystickRailColor = new Color(1f, 1f, 1f, 0.12f);
         static readonly Color KnobColor = new Color(1f, 1f, 1f, 0.45f);
@@ -45,6 +45,9 @@ namespace WheelingMoto.UI
         MotorcycleController controller;
         MotoCameraRig cameraRig;
         UITheme theme;
+
+        /// <summary>Racine du canvas : le récapitulatif de fin de session s'y pose, par-dessus tout le HUD.</summary>
+        Transform hudRoot;
         TextMeshProUGUI speedText;
         TextMeshProUGUI viewLabel;
         CameraView displayedView;
@@ -65,6 +68,11 @@ namespace WheelingMoto.UI
             if (controller != null)
             {
                 controller.Fell += OnFell;
+
+                // Ouvre la session de mesure et branche les missions sur la conduite. Posé ici plutôt
+                // que dans la scène : ajouter un composant à un fichier .unity pour un script qui se
+                // suffit à lui-même compliquerait les fusions pour rien.
+                RunStatsCollector.Install(controller);
             }
         }
 
@@ -108,6 +116,7 @@ namespace WheelingMoto.UI
         {
             var canvas = UIFactory.CreateRootCanvas("MetropoleHUDCanvas");
             var root = canvas.transform;
+            hudRoot = root;
 
             // Créée en premier, donc dessinée derrière : les boutons restent prioritaires.
             // Plein écran : glisser depuis les bords tourne aussi la caméra.
@@ -122,7 +131,7 @@ namespace WheelingMoto.UI
 
             UIFactory.AddButton(safeArea, "BackButton", "◀ MENU", ControlColor, ControlTextColor, 16,
                 new Vector2(1, 1), new Vector2(1, 1), new Vector2(-Margin - 160, -60), new Vector2(-Margin, -20),
-                () => SceneLoader.LoadMainMenu());
+                OnBackPressed);
 
             if (cameraRig != null)
             {
@@ -149,6 +158,25 @@ namespace WheelingMoto.UI
             }
 
             BuildPedals(safeArea);
+
+            // Construit en dernier pour passer au-dessus des commandes : le bandeau occupe la bande
+            // haute, que le bouton Menu borde de près.
+            MissionToast.Create(safeArea, theme);
+        }
+
+        /// <summary>
+        /// Clôt la session et montre le bilan avant de rendre la main au menu. Le récapitulatif ne
+        /// distribue rien : si le joueur quitte l'application au lieu de le valider, il n'a rien
+        /// perdu, tout a déjà été crédité pendant la conduite.
+        /// </summary>
+        void OnBackPressed()
+        {
+            var stats = MissionTracker.EndRun();
+
+            if (!RunSummaryScreen.TryShow(hudRoot, theme, stats, SceneLoader.LoadMainMenu))
+            {
+                SceneLoader.LoadMainMenu();
+            }
         }
 
         void BuildSteerArrows(Transform parent)
@@ -239,7 +267,7 @@ namespace WheelingMoto.UI
 
             UIFactory.AddText(band.transform, "FallTitle", "CHUTE !", 56, Color.white, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -10f), new Vector2(0f, 60f));
-            fallHint = UIFactory.AddText(band.transform, "FallHint", WheelieFallHint, 18, theme.TextMuted, TextAnchor.MiddleCenter,
+            fallHint = UIFactory.AddText(band.transform, "FallHint", WheelieFallHint, UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleCenter,
                 new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -55f), new Vector2(0f, -15f));
         }
 

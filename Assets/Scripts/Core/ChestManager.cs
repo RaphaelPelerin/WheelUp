@@ -29,7 +29,9 @@ namespace WheelingMoto.Core
     public static class ChestManager
     {
         static readonly Color CoinColor = new Color(1f, 0.80f, 0.28f);
-        static readonly Color UpgradeColor = new Color(0.96f, 0.36f, 0.13f);
+        // Rouge de la marque, recopié plutôt qu'importé : la couche Core ne dépend pas de l'UI.
+        // Valeur de référence : UITheme.Brand.
+        static readonly Color UpgradeColor = new Color(0.992f, 0.094f, 0.137f);
 
         public static bool CanAfford(ChestInfo chest) => EconomyManager.Coins >= chest.Price;
 
@@ -41,6 +43,18 @@ namespace WheelingMoto.Core
         public static List<ChestReward> Open(ChestInfo chest)
         {
             if (chest == null || !EconomyManager.SpendCoins(chest.Price)) return null;
+
+            return Grant(chest);
+        }
+
+        /// <summary>
+        /// Attribue les lots d'un coffre sans rien débiter : c'est par ici qu'entrent les coffres
+        /// offerts par les missions. Le tirage, les replis et l'ordre de révélation sont exactement
+        /// ceux d'un coffre acheté — seul le paiement change, et il reste dans <see cref="Open"/>.
+        /// </summary>
+        public static List<ChestReward> Grant(ChestInfo chest)
+        {
+            if (chest == null) return null;
 
             var rewards = new List<ChestReward> { GrantCoins(CoinsEntry(chest)) };
 
@@ -66,6 +80,11 @@ namespace WheelingMoto.Core
             }
 
             rewards.Sort((a, b) => a.Rarity.CompareTo(b.Rarity));
+
+            // Compté ici plutôt qu'à l'achat : une mission « ouvre un coffre » doit être satisfaite
+            // par le coffre lui-même, qu'il ait été payé ou offert.
+            MissionTracker.ReportEvent(MissionMetric.ChestOpened);
+
             return rewards;
         }
 

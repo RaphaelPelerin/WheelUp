@@ -34,10 +34,16 @@ namespace WheelingMoto.UI
 
             UIFactory.AddPanel(root, "Background", theme.Background, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 
-            UIFactory.AddText(root, "Title", "WHEELING MOTO", 40, theme.Accent, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-400, 60), new Vector2(400, 130));
+            // Le logo tient lieu de titre. S'il manque, on écrit le nom : un écran de chargement
+            // sans rien au-dessus de la barre ne dit plus quel jeu se lance.
+            if (UIFactory.AddBrandLogo(root, "Logo", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                    new Vector2(-260, 60), new Vector2(260, 300)) == null)
+            {
+                UIFactory.AddText(root, "Title", "WHEEL UP", 40, theme.Accent, TextAnchor.MiddleCenter,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-400, 60), new Vector2(400, 130));
+            }
 
-            statusText = UIFactory.AddText(root, "StatusText", "Chargement...", 20, theme.TextMuted, TextAnchor.MiddleCenter,
+            statusText = UIFactory.AddText(root, "StatusText", "Chargement...", UITheme.FontBody, theme.TextMuted, TextAnchor.MiddleCenter,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-300, -70), new Vector2(300, -30));
 
             var barBg = UIFactory.AddPanel(root, "BarBackground", theme.PanelAlt,

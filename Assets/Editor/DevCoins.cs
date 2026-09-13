@@ -42,6 +42,13 @@ namespace WheelingMoto.EditorTools
 
             PlayerPrefs.DeleteAll();
             EconomyManager.SetCoins(500); // réécrit le solde de départ et rafraîchit le badge
+
+            // Missions, compteurs à vie et succès sont gardés en mémoire : sans ces rappels, ils
+            // survivraient à l'effacement et se réécriraient tels quels à la première progression.
+            MissionManager.ResetAll();
+            PlayerStats.ResetAll();
+            AchievementManager.ResetAll();
+
             Debug.Log("[WheelUp] Progression effacée, solde remis à 500 pièces.");
         }
 

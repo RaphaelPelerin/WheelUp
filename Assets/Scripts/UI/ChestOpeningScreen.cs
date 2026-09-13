@@ -12,7 +12,7 @@ namespace WheelingMoto.UI
     /// <summary>
     /// Écran plein cadre d'ouverture de coffre, dans l'esprit de Clash Royale : le menu disparaît, le
     /// coffre occupe l'écran, tremble, s'ouvre, puis ses lots se révèlent un par un du plus commun au
-    /// plus rare. Un clic n'importe où fait avancer la séquence, et l'écran se referme sur le bouton final.
+    /// plus rare. Un clic n'importe où fait avancer la séquence, et un dernier clic referme l'écran.
     /// </summary>
     [DisallowMultipleComponent]
     public class ChestOpeningScreen : MonoBehaviour
@@ -46,6 +46,10 @@ namespace WheelingMoto.UI
         UITheme theme;
         CanvasGroup rootGroup;
 
+        // Cadre replié sur la zone sûre : le fond opaque couvre la dalle entière, mais le coffre, les
+        // cartes et le bouton final se rangent en deçà de la Dynamic Island et des coins arrondis.
+        Transform frame;
+
         Image backdrop;
         Image glow;
         RectTransform chestVisual;
@@ -57,7 +61,6 @@ namespace WheelingMoto.UI
         TextMeshProUGUI titleText;
         TextMeshProUGUI subtitleText;
         TextMeshProUGUI hintText;
-        Button closeButton;
 
         ChestTouchSurface surface;
         GameObject holdGauge;
@@ -72,6 +75,15 @@ namespace WheelingMoto.UI
         int revealed;
         bool waitingForOpen;
         bool sequenceRunning;
+
+        // Séquence terminée, écran encore affiché : c'est la seule fenêtre où un appui referme.
+        // Un drapeau explicite plutôt que l'absence des deux autres états, pour qu'un appui tombant
+        // dans une transition ne puisse pas fermer l'écran avant que les lots soient montrés.
+        bool finished;
+
+        // Fondu de fermeture en cours : sans ce verrou, un second appui rappellerait Close, dont le
+        // StopAllCoroutines interromprait le fondu et laisserait l'écran à demi transparent.
+        bool closing;
         bool holding;
         float holdProgress;
 
@@ -95,7 +107,8 @@ namespace WheelingMoto.UI
             // Fond opaque : il avale les clics du menu resté dessous et porte tous les gestes de
             // l'écran — maintien pour ouvrir, glissement pour tourner le coffre, appui bref pour
             // enchaîner les révélations. Une seule surface, pour qu'aucun geste ne tombe à côté.
-            backdrop = UIFactory.AddPanel(Root.transform, "Backdrop", new Color(0.035f, 0.04f, 0.055f, 0.985f),
+            backdrop = UIFactory.AddPanel(Root.transform, "Backdrop",
+                new Color(UITheme.BrandBlack.r, UITheme.BrandBlack.g, UITheme.BrandBlack.b, 0.985f),
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             backdrop.raycastTarget = true;
 
@@ -105,35 +118,32 @@ namespace WheelingMoto.UI
             surface.Tapped = OnScreenTapped;
             surface.Dragged = OnDragged;
 
-            glow = UIFactory.AddGlow(Root.transform, "Glow", new Color(1f, 1f, 1f, 0f),
+            frame = UIFactory.AddSafeArea(Root.transform, "SafeFrame").transform;
+
+            glow = UIFactory.AddGlow(frame, "Glow", new Color(1f, 1f, 1f, 0f),
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(-820, -760), new Vector2(820, 760));
 
             // Titre et sous-titre sont poussés vers le haut du cadre : la place qu'ils libèrent
             // revient au coffre, qui est le sujet de l'écran.
-            titleText = UIFactory.AddText(Root.transform, "Title", "", 46, theme.Text, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-600, 428), new Vector2(600, 502),
+            titleText = UIFactory.AddText(frame, "Title", "", 46, theme.Text, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-600, -112), new Vector2(600, -38),
                 FontStyles.Bold | FontStyles.Italic);
 
-            subtitleText = UIFactory.AddText(Root.transform, "Subtitle", "", 20, theme.TextMuted, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-600, 392), new Vector2(600, 428));
+            subtitleText = UIFactory.AddText(frame, "Subtitle", "", UITheme.FontBody, theme.TextMuted, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-600, -154), new Vector2(600, -112));
 
             BuildChestStage();
 
-            rewardRow = UIFactory.CreateUIObject("Rewards", Root.transform);
+            rewardRow = UIFactory.CreateUIObject("Rewards", frame);
             UIFactory.SetRect(rewardRow, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(-960, -CardHeight * 0.5f), new Vector2(960, CardHeight * 0.5f));
 
             BuildHoldGauge();
 
-            hintText = UIFactory.AddText(Root.transform, "Hint", "", 20, theme.NavTextInactive, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-600, -505), new Vector2(600, -462),
+            hintText = UIFactory.AddText(frame, "Hint", "", UITheme.FontBody, theme.NavTextInactive, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-600, 30), new Vector2(600, 80),
                 FontStyles.Bold);
-
-            closeButton = UIFactory.AddButton(Root.transform, "Close", "TERMINÉ", theme.Accent, Color.white, 22,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-220, -512), new Vector2(220, -436),
-                Close, ButtonKind.Primary);
-            SetCloseVisible(false);
 
             Root.SetActive(false);
         }
@@ -143,9 +153,9 @@ namespace WheelingMoto.UI
             // Le coffre prend tout le cadre laissé libre entre le sous-titre et la jauge. Il était
             // auparavant cantonné à une vignette au centre, alors que rien d'autre ne s'affiche
             // pendant l'ouverture.
-            var stage = UIFactory.CreateUIObject("ChestStage", Root.transform);
-            UIFactory.SetRect(stage, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(-520, -400), new Vector2(520, 380));
+            var stage = UIFactory.CreateUIObject("ChestStage", frame);
+            UIFactory.SetRect(stage, new Vector2(0.5f, 0f), new Vector2(0.5f, 1f),
+                new Vector2(-520, 140), new Vector2(520, -160));
 
             // L'éclat est créé AVANT le conteneur, donc dessiné derrière lui : posé par-dessus, il
             // repeignait tout le rendu — coffre et confettis — à la couleur de la rareté. Derrière,
@@ -180,9 +190,9 @@ namespace WheelingMoto.UI
         /// </summary>
         void BuildHoldGauge()
         {
-            var track = UIFactory.AddPanel(Root.transform, "HoldTrack", theme.PanelAlt,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(-HoldBarWidth * 0.5f, -452), new Vector2(HoldBarWidth * 0.5f, -428),
+            var track = UIFactory.AddPanel(frame, "HoldTrack", theme.PanelAlt,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(-HoldBarWidth * 0.5f, 88), new Vector2(HoldBarWidth * 0.5f, 112),
                 rounded: true);
             track.raycastTarget = false;
             holdGauge = track.gameObject;
@@ -254,7 +264,8 @@ namespace WheelingMoto.UI
             titleText.text = chest.Name.ToUpperInvariant();
             subtitleText.text = $"{rewards.Count} récompenses";
             hintText.text = "MAINTIENS POUR OUVRIR  •  GLISSE POUR TOURNER";
-            SetCloseVisible(false);
+            finished = false;
+            closing = false;
 
             var best = rewards[rewards.Count - 1].Rarity;
             var bestColor = ChestCatalog.RarityColor(best);
@@ -335,15 +346,17 @@ namespace WheelingMoto.UI
             bool hasIcon = GetIcon(index, iconRender).Show(iconRender, reward.IconPath, reward.Swatch);
             swatch.gameObject.SetActive(!hasIcon);
 
-            UIFactory.AddText(body.transform, "Kind", KindLabel(reward.Kind), 14, rarityColor, TextAnchor.MiddleCenter,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(12, -178), new Vector2(-12, -150), FontStyles.Bold);
+            UIFactory.AddText(body.transform, "Kind", KindLabel(reward.Kind), UITheme.FontLabel, rarityColor,
+                TextAnchor.MiddleCenter, new Vector2(0, 1), new Vector2(1, 1),
+                new Vector2(12, -184), new Vector2(-12, -146), FontStyles.Bold);
 
-            UIFactory.AddText(body.transform, "Title", reward.Title, 24, theme.Text, TextAnchor.MiddleCenter,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(12, -238), new Vector2(-12, -182),
+            UIFactory.AddText(body.transform, "Title", reward.Title, UITheme.FontHeading, theme.Text, TextAnchor.MiddleCenter,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(12, -242), new Vector2(-12, -184),
                 FontStyles.Bold | FontStyles.Italic);
 
-            UIFactory.AddText(body.transform, "Detail", reward.Detail, 14, theme.TextMuted, TextAnchor.UpperCenter,
-                new Vector2(0, 0), new Vector2(1, 1), new Vector2(14, 14), new Vector2(-14, -242));
+            UIFactory.AddText(body.transform, "Detail", reward.Detail, UITheme.FontLabel, theme.TextMuted,
+                TextAnchor.UpperCenter, new Vector2(0, 0), new Vector2(1, 1),
+                new Vector2(14, 14), new Vector2(-14, -246));
 
             var group = holder.gameObject.AddComponent<CanvasGroup>();
             group.alpha = 0f;
@@ -371,8 +384,27 @@ namespace WheelingMoto.UI
             }
         }
 
+        /// <summary>
+        /// Tous les lots sont montrés : il ne reste qu'à refermer. Le cas où la séquence n'a pas eu
+        /// le temps de se déclarer terminée est accepté lui aussi — un écran dont tout est déjà
+        /// révélé ne doit jamais retenir le joueur, puisqu'il n'a plus de bouton pour en sortir.
+        /// </summary>
+        bool CanDismiss => !closing && !waitingForOpen
+            && (finished || (currentRewards != null && revealed >= currentRewards.Count));
+
         void OnPressed()
         {
+            // La fermeture part de l'appui et non du relâchement : le relâchement passe par le filtre
+            // anti-glissement de la surface, et sur une dalle tactile le doigt dérive presque toujours
+            // de quelques pixels — au-delà du seuil de l'EventSystem, le geste devient un glissement
+            // et l'appui bref n'est jamais signalé. À ce stade le coffre a disparu de l'écran, il n'y
+            // a plus rien à faire tourner : aucun geste utile n'est sacrifié.
+            if (CanDismiss)
+            {
+                Close();
+                return;
+            }
+
             if (waitingForOpen) holding = true;
         }
 
@@ -382,11 +414,18 @@ namespace WheelingMoto.UI
         }
 
         /// <summary>
-        /// Un appui bref fait sauter l'attente entre deux révélations. Il n'ouvre plus le coffre :
-        /// l'ouverture demande un maintien, sinon un clic perdu déclencherait toute la séquence.
+        /// Un appui bref fait sauter l'attente entre deux révélations, puis, une fois tous les lots
+        /// montrés, referme l'écran. Il n'ouvre pas le coffre : l'ouverture demande un maintien,
+        /// sinon un clic perdu déclencherait toute la séquence.
         /// </summary>
         void OnScreenTapped()
         {
+            if (CanDismiss)
+            {
+                Close();
+                return;
+            }
+
             if (sequenceRunning) RevealNext();
         }
 
@@ -429,8 +468,8 @@ namespace WheelingMoto.UI
             }
 
             sequenceRunning = false;
-            hintText.text = "";
-            SetCloseVisible(true);
+            finished = true;
+            hintText.text = "APPUIE POUR FERMER";
         }
 
         /// <summary>
@@ -513,19 +552,12 @@ namespace WheelingMoto.UI
             chestPlaceholderText.color = new Color(theme.TextMuted.r, theme.TextMuted.g, theme.TextMuted.b, alpha);
         }
 
-        void SetCloseVisible(bool visible)
-        {
-            closeButton.gameObject.SetActive(visible);
-
-            // AddButton(Primary) crée l'ombre comme frère juste avant le bouton : elle suit son état.
-            var shadow = Root.transform.Find("Close_Shadow");
-            if (shadow != null) shadow.gameObject.SetActive(visible);
-        }
-
         void Close()
         {
-            if (!IsOpen) return;
+            if (!IsOpen || closing) return;
 
+            closing = true;
+            finished = false;
             waitingForOpen = false;
             holding = false;
             holdProgress = 0f;
@@ -540,6 +572,7 @@ namespace WheelingMoto.UI
             yield return StartCoroutine(FadeRoot(1f, 0f));
 
             Root.SetActive(false);
+            closing = false;
             onClosed?.Invoke();
         }
 

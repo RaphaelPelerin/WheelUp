@@ -29,7 +29,7 @@ namespace WheelingMoto.UI
             public TextMeshProUGUI ButtonLabel;
             public ChestThumbnail Thumbnail;
             public GameObject PreviewPlaceholder;
-            public TextMeshProUGUI Odds;
+            public StorefrontCard Card;
         }
 
         UITheme theme;
@@ -69,7 +69,7 @@ namespace WheelingMoto.UI
                     ButtonLabel = card.ActionLabel,
                     Thumbnail = thumbnail,
                     PreviewPlaceholder = placeholder,
-                    Odds = card.Note,
+                    Card = card,
                 });
             }
         }
@@ -79,7 +79,7 @@ namespace WheelingMoto.UI
         {
             Storefront.AddPreviewGlow(slot, new Color(0.42f, 0.46f, 0.62f, 0.20f));
 
-            placeholder = UIFactory.AddText(slot, "Missing", chest.Name, 16, theme.NavTextInactive,
+            placeholder = UIFactory.AddText(slot, "Missing", chest.Name, UITheme.FontLabel, theme.NavTextInactive,
                 TextAnchor.MiddleCenter, Vector2.zero, Vector2.one, new Vector2(10, 10), new Vector2(-10, -10),
                 FontStyles.Italic).gameObject;
 
@@ -145,7 +145,7 @@ namespace WheelingMoto.UI
             foreach (var card in cards)
             {
                 // Recalculé ici : débloquer la dernière peinture change les chances de tous les coffres.
-                card.Odds.text = OddsSummary(card.Chest);
+                card.Card.SetInfo(card.Chest.Description, OddsSummary(card.Chest));
 
                 bool affordable = ChestManager.CanAfford(card.Chest);
                 card.Button.interactable = affordable;

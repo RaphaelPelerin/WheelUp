@@ -55,12 +55,14 @@ namespace WheelingMoto.UI
             markerImage.raycastTarget = false;
             SetMarker(0f);
 
-            titleText = UIFactory.AddText(root, "TitleText", "", 13, theme.Text, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-70, 8), new Vector2(70, 28));
-            angleText = UIFactory.AddText(root, "AngleText", "0°", 18, theme.Text, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-60, -30), new Vector2(60, -8));
-            statusText = UIFactory.AddText(root, "StatusText", "", 14, theme.Text, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-60, -50), new Vector2(60, -30));
+            // Les trois libellés de la jauge sont passés au corps commun : leurs boîtes s'élargissent
+            // d'autant, sans quoi le texte serait rogné au lieu d'être simplement plus gros.
+            titleText = UIFactory.AddText(root, "TitleText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-140, 8), new Vector2(140, 42));
+            angleText = UIFactory.AddText(root, "AngleText", "0°", UITheme.FontBody, theme.Text, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-90, -44), new Vector2(90, -8));
+            statusText = UIFactory.AddText(root, "StatusText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-140, -82), new Vector2(140, -46));
         }
 
         public void Tick()

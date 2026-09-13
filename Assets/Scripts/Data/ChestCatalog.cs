@@ -108,6 +108,16 @@ namespace WheelingMoto.Data
                 }),
         };
 
+        /// <summary>Retrouve un coffre par son identifiant. Null si l'identifiant ne correspond à rien.</summary>
+        public static ChestInfo Find(string id)
+        {
+            foreach (var chest in All)
+            {
+                if (chest.Id == id) return chest;
+            }
+            return null;
+        }
+
         public static Color RarityColor(ChestRarity rarity)
         {
             switch (rarity)

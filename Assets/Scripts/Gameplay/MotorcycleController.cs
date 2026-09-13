@@ -3,6 +3,7 @@ using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
+using WheelingMoto.Core;
 using WheelingMoto.Data;
 
 namespace WheelingMoto.Gameplay
@@ -399,13 +400,16 @@ namespace WheelingMoto.Gameplay
         // qui ne l'a pas importé. On retombe alors sur le modèle de la moto de base, chargé depuis Resources.
         GameObject LoadCatalogModel()
         {
-            var moto = MotoCatalog.Default;
-            if (moto == null || string.IsNullOrEmpty(moto.ModelResourcePath)) return null;
+            // La moto équipée au garage, et non plus la moto de départ : c'est ce qui relie enfin le
+            // garage à la conduite. Loadout retombe seul sur un modèle existant quand celle qu'a
+            // choisie le joueur n'en a pas encore.
+            string path = Loadout.RideableModelPath();
+            if (string.IsNullOrEmpty(path)) return null;
 
-            var model = Resources.Load<GameObject>(moto.ModelResourcePath);
+            var model = Resources.Load<GameObject>(path);
             if (model == null)
             {
-                Debug.LogWarning($"Modèle introuvable pour {moto.Name} : Resources/{moto.ModelResourcePath}");
+                Debug.LogWarning($"Modèle introuvable : Resources/{path}");
             }
             return model;
         }
@@ -462,7 +466,7 @@ namespace WheelingMoto.Gameplay
                         visual.transform.localPosition = new Vector3(0f, modelGroundOffset, -rearContactZ);
                         visual.transform.localRotation = Quaternion.Euler(visualEulerOffset);
                     }
-                    MotoPainter.Apply(visual, MotoCatalog.Default.Name);
+                    MotoPainter.Apply(visual, Loadout.Selected.Name);
 
                     Transform model = visual.transform;
                     visualModel = model;

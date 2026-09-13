@@ -8,6 +8,19 @@ namespace WheelingMoto.UI
     /// <summary>Onglet Paramètres : graphismes, audio et rappel des contrôles tactiles.</summary>
     public class SettingsMenu
     {
+        /// <summary>
+        /// Notice des contrôles, ouverte par la pastille « i » de la colonne de droite. Elle est
+        /// aérée d'une ligne vide entre les entrées : en plein écran et en gros corps, une liste
+        /// serrée se lit moins bien qu'une liste espacée.
+        /// </summary>
+        const string ControlsHelp =
+            "◀ / ▶ ou joystick\ndiriger la moto. Lâché, le joystick revient au milieu.\n\n" +
+            "GAZ\naccélérer.\n\n" +
+            "LEVER\naccélérer et lever la roue avant.\n\n" +
+            "FREIN\nfreiner. Appuyé fort en roulant vite, il lève l'arrière et met la moto sur la " +
+            "roue avant. À l'arrêt, il fait reculer.\n\n" +
+            "GLISSER L'ÉCRAN\ntourner la caméra. Le bouton VUE change de point de vue.";
+
         public GameObject Root { get; private set; }
 
         UITheme theme;
@@ -38,34 +51,34 @@ namespace WheelingMoto.UI
             var panel = UIFactory.AddPanel(parent, "SettingsPanel", Color.clear, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             Root = panel.gameObject;
 
-            UIFactory.AddText(Root.transform, "Title", "PARAMÈTRES & BOUTIQUE", 30, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(30, -50), new Vector2(-30, -6));
+            UIFactory.AddText(Root.transform, "Title", "PARAMÈTRES & BOUTIQUE", UITheme.FontTitle, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(30, -56), new Vector2(-30, -6));
 
             var left = UIFactory.AddPanel(Root.transform, "Graphics", theme.Panel,
                 new Vector2(0, 0), new Vector2(0.5f, 1), new Vector2(20, 10), new Vector2(-10, -60));
 
-            UIFactory.AddText(left.transform, "SectionTitle", "Graphismes & Audio", 22, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -56), new Vector2(-22, -16));
+            UIFactory.AddText(left.transform, "SectionTitle", "Graphismes & Audio", UITheme.FontHeading, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -60), new Vector2(-22, -14));
 
-            UIFactory.AddText(left.transform, "QualityLabel", "Qualité graphique", 17, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -100), new Vector2(-22, -76));
+            UIFactory.AddText(left.transform, "QualityLabel", "Qualité graphique", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -102), new Vector2(-22, -70));
             qualityStepper = UIFactory.AddStepper(left.transform, "QualityStepper", theme,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -156), new Vector2(-22, -108), PrevQuality, NextQuality);
 
-            UIFactory.AddText(left.transform, "MasterLabel", "Volume général", 17, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -200), new Vector2(-22, -176));
+            UIFactory.AddText(left.transform, "MasterLabel", "Volume général", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -202), new Vector2(-22, -170));
             masterStepper = UIFactory.AddStepper(left.transform, "MasterStepper", theme,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -256), new Vector2(-22, -208),
                 () => AdjustMaster(-0.1f), () => AdjustMaster(0.1f));
 
-            UIFactory.AddText(left.transform, "MusicLabel", "Musique", 17, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -300), new Vector2(-22, -276));
+            UIFactory.AddText(left.transform, "MusicLabel", "Musique", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -302), new Vector2(-22, -270));
             musicStepper = UIFactory.AddStepper(left.transform, "MusicStepper", theme,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -356), new Vector2(-22, -308),
                 () => AdjustMusic(-0.1f), () => AdjustMusic(0.1f));
 
-            UIFactory.AddText(left.transform, "SfxLabel", "Effets sonores", 17, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -400), new Vector2(-22, -376));
+            UIFactory.AddText(left.transform, "SfxLabel", "Effets sonores", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -402), new Vector2(-22, -370));
             sfxStepper = UIFactory.AddStepper(left.transform, "SfxStepper", theme,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -456), new Vector2(-22, -408),
                 () => AdjustSfx(-0.1f), () => AdjustSfx(0.1f));
@@ -73,27 +86,27 @@ namespace WheelingMoto.UI
             var right = UIFactory.AddPanel(Root.transform, "Controls", theme.Panel,
                 new Vector2(0.5f, 0), new Vector2(1, 1), new Vector2(10, 10), new Vector2(-20, -60));
 
-            UIFactory.AddText(right.transform, "SectionTitle", "Contrôles", 22, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -56), new Vector2(-22, -16));
+            UIFactory.AddText(right.transform, "SectionTitle", "Contrôles", UITheme.FontHeading, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -60), new Vector2(-22, -14));
 
-            UIFactory.AddText(right.transform, "SteeringLabel", "Direction", 17, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -100), new Vector2(-22, -76));
-            arrowsButton = UIFactory.AddButton(right.transform, "ArrowsButton", "FLÈCHES", theme.PanelAlt, theme.Text, 18,
-                new Vector2(0, 1), new Vector2(0.5f, 1), new Vector2(22, -156), new Vector2(-6, -108),
+            // Les six lignes de la notice tenaient en corps 16 dans la colonne. Elles s'ouvrent
+            // maintenant en plein écran, où elles se lisent au même corps que le reste du jeu.
+            UIFactory.AddInfoButton(right.transform, "ControlsInfo", theme, "Contrôles tactiles", ControlsHelp,
+                new Vector2(1, 1), new Vector2(1, 1), new Vector2(-78, -70), new Vector2(-22, -14));
+
+            UIFactory.AddText(right.transform, "SteeringLabel", "Direction", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -102), new Vector2(-22, -70));
+            arrowsButton = UIFactory.AddButton(right.transform, "ArrowsButton", "FLÈCHES", theme.PanelAlt, theme.Text, UITheme.FontLabel,
+                new Vector2(0, 1), new Vector2(0.5f, 1), new Vector2(22, -164), new Vector2(-6, -108),
                 () => SelectSteering(SteeringControl.Fleches));
-            joystickButton = UIFactory.AddButton(right.transform, "JoystickButton", "JOYSTICK", theme.PanelAlt, theme.Text, 18,
-                new Vector2(0.5f, 1), new Vector2(1, 1), new Vector2(6, -156), new Vector2(-22, -108),
+            joystickButton = UIFactory.AddButton(right.transform, "JoystickButton", "JOYSTICK", theme.PanelAlt, theme.Text, UITheme.FontLabel,
+                new Vector2(0.5f, 1), new Vector2(1, 1), new Vector2(6, -164), new Vector2(-22, -108),
                 () => SelectSteering(SteeringControl.Joystick));
-
-            UIFactory.AddText(right.transform, "ControlsInfo",
-                "Contrôles tactiles :\n• ◀ / ▶ ou joystick : diriger (lâché, le joystick revient au milieu)\n• GAZ : accélérer\n• LEVER : accélérer et lever la roue avant\n• FREIN : freiner ; fort en roulant vite, il lève l'arrière (roue avant) ; recule à l'arrêt\n• Glisser l'écran : tourner la caméra · VUE : changer de vue",
-                16, theme.TextMuted, TextAnchor.UpperLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -340), new Vector2(-22, -176));
 
             // Les achats ont quitté cet écran pour l'onglet Boutique : ils y côtoient les lots de
             // pièces, sous la même bannière que les coffres.
-            adsStateText = UIFactory.AddText(right.transform, "AdsState", "", 15, theme.TextMuted, TextAnchor.UpperLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -408), new Vector2(-22, -360));
+            adsStateText = UIFactory.AddText(right.transform, "AdsState", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.UpperLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -300), new Vector2(-22, -196));
 
             UpdateQualityLabel();
             UpdateMasterLabel();

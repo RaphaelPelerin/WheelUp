@@ -22,6 +22,12 @@ namespace WheelingMoto.UI
             public StorefrontCard Card;
         }
 
+        // La carte « sans publicité » dit la même chose à la construction et après l'achat : les
+        // textes vivent ici plutôt que recopiés aux deux endroits, où ils finiraient par diverger.
+        const string AdsDescription = "Plus aucune coupure entre deux parties.";
+        const string AdsAvailableNote = "Achat unique, valable sur ce compte.";
+        const string AdsOwnedNote = "Publicités désactivées sur ce compte.";
+
         public GameObject Root { get; private set; }
 
         UITheme theme;
@@ -61,9 +67,8 @@ namespace WheelingMoto.UI
             }
 
             var adsCard = Storefront.BuildCard(row, theme, packs.Length, count, MonetizationManager.RemoveAdsId,
-                "Sans publicité", "Plus aucune coupure entre deux parties.",
-                "Achat unique\nvalable sur ce compte", $"ACHETER — {MonetizationManager.RemoveAdsPrice}",
-                OnRemoveAdsPressed);
+                "Sans publicité", AdsDescription, AdsAvailableNote,
+                $"ACHETER — {MonetizationManager.RemoveAdsPrice}", OnRemoveAdsPressed);
 
             BuildAdsPreview(adsCard.Preview);
             cards.Add(new ShopCard { Pack = null, Card = adsCard });
@@ -118,9 +123,7 @@ namespace WheelingMoto.UI
 
                 // Produit non consommable : une fois acheté, la carte annonce l'état au lieu de
                 // proposer un achat que le store refuserait.
-                entry.Card.Note.text = adsRemoved
-                    ? "Publicités désactivées\nsur ce compte"
-                    : "Achat unique\nvalable sur ce compte";
+                entry.Card.SetInfo(AdsDescription, adsRemoved ? AdsOwnedNote : AdsAvailableNote);
                 entry.Card.Action.interactable = !adsRemoved;
                 entry.Card.ActionLabel.text = adsRemoved
                     ? "DÉJÀ ACTIF"
