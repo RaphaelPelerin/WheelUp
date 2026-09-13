@@ -118,3 +118,12 @@ InitTestScene*.unity*
 /Assets/Honda Motor Co., Ltd.meta
 /Assets/Versatile Studio Assets/
 /Assets/Versatile Studio Assets.meta
+
+# Asset regenere par le package Microsoft GDK a chaque ouverture de l editeur.
+# Supprime du depot des deux cotes du merge ui/interface : on ne le reversionne pas.
+/Assets/Resources/GDKEditionAutoGen/
+/Assets/Resources/GDKEditionAutoGen.meta
+
+# Doublon des hooks Git LFS, recree tout seul sous Windows.
+# Les vrais hooks vivent dans .git/hooks : ce dossier-ci est un artefact.
+/dev/null/
