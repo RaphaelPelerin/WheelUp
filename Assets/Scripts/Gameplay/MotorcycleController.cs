@@ -112,10 +112,18 @@ namespace WheelingMoto.Gameplay
         // démarrage (voir ApplyStats). Ne restent ici que les réglages communs à toutes les motos.
 
         [Header("Freins")]
-        [Tooltip("Part du freinage maximal de la moto donnée par le seul frein avant : l'essentiel, la charge passe sur la roue avant.")]
-        public float frontBrakeShare = 0.85f;
-        [Tooltip("Part du freinage maximal donnée par le seul frein arrière. C'est le frein principal du HUD : tenu seul, il doit arrêter la moto aussi fort que la fiche technique le permet, d'où une part pleine. Le plafond de BrakingDeceleration fait que l'ajouter au frein avant ne donne rien de plus : les deux ensemble valent déjà le maximum.")]
-        public float rearBrakeShare = 1f;
+        [Tooltip("Part du freinage maximal de la moto donnée par le seul frein avant (FREIN AV) : un appoint dosable, surtout fait pour la roue avant.")]
+        public float frontBrakeShare = 0.7f;
+        [Tooltip("Part du freinage maximal donnée par le frein principal (bouton FREIN, flèche du bas). Au-delà de 1, il freine plus fort que la fiche technique seule : c'est la commande pour s'arrêter franchement. Elle sert aussi de plafond quand les deux freins sont serrés ensemble.")]
+        public float rearBrakeShare = 1.25f;
+        [Tooltip("Temps pour serrer le frein avant à fond, en secondes : il mord progressivement au lieu de bloquer d'un coup.")]
+        public float frontBrakeApplyTime = 0.25f;
+        [Tooltip("Temps pour serrer le frein principal à fond, en secondes : vif, mais pas instantané.")]
+        public float mainBrakeApplyTime = 0.1f;
+        [Tooltip("Temps pour relâcher un frein, en secondes.")]
+        public float brakeReleaseTime = 0.08f;
+        [Tooltip("Part de son freinage que le frein principal garde en wheeling : il sert alors à doser la roue, et chaque petit appui ne doit pas casser la vitesse.")]
+        public float wheelieBrakeDecelShare = 0.3f;
 
         [Header("Conduite")]
         [Tooltip("Frein moteur de base, gaz coupés, en m/s² : renforcé sur les petits rapports et haut dans les tours. Il s'ajoute aux étriers sous le frein comme en roue libre, et c'est le seul apport qui dépasse le freinage maximal de la fiche technique — donc le levier à bouger pour un freinage plus mordant.")]
@@ -218,9 +226,11 @@ namespace WheelingMoto.Gameplay
 
         [Header("Wheeling - couples (degrés/s²)")]
         [Tooltip("Levée donnée par LEVER roue au sol et en montée : forte, la roue décolle sèchement.")]
-        public float wheelieLiftTorque = 320f;
-        [Tooltip("Levée donnée par LEVER une fois dans la zone d'équilibre : elle reste forte, comme des gaz qui restent ouverts. LEVER tenu en continu fait passer la moto en arrière en une seconde environ : on tient le point d'équilibre par petites touches de LEVER et de FREIN.")]
-        public float wheelieHoldTorque = 170f;
+        public float wheelieLiftTorque = 300f;
+        [Tooltip("Levée donnée par LEVER une fois dans la zone d'équilibre : elle continue de monter la roue. LEVER tenu en continu fait passer la moto en arrière en une seconde et demie environ, dont une demi-seconde pour réagir une fois dans la zone.")]
+        public float wheelieHoldTorque = 90f;
+        [Tooltip("Tenue de la roue par GAZ, roue avant déjà en l'air : les gaz ouverts empêchent la roue de retomber d'un coup. Juste sous la dérive de la zone : GAZ seul, la roue redescend lentement depuis le bas de la zone, et on accélère en wheeling en redonnant de petites touches de LEVER.")]
+        public float wheelieThrottleHoldTorque = 28f;
         [Tooltip("Frein arrière dans la zone de montée et d'équilibre : il rabat la roue aussi vite qu'elle monte.")]
         public float wheelieBrakeTorque = 215f;
         [Tooltip("Frein arrière en zone critique : appliqué en plus d'un arrêt net de la montée.")]
@@ -234,7 +244,7 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Rappel vers le sol quand la moto roule trop lentement pour tenir la roue.")]
         public float stalledPull = 90f;
         [Tooltip("Amortissement du wheeling : bas = moto vive qui dépasse sa cible, haut = moto docile.")]
-        public float wheelieDamping = 1.2f;
+        public float wheelieDamping = 2f;
         public float wheelieMinSpeed = 1.5f;
         [Tooltip("Perturbation due aux bosses de la route, roue avant levée : empêche de tenir le wheeling sans corriger.")]
         public float wheelieBumpTorque = 30f;
@@ -243,9 +253,9 @@ namespace WheelingMoto.Gameplay
 
         [Header("Roue avant (stoppie)")]
         [Tooltip("Durée d'appui sur FREIN AV avant que l'arrière commence à se lever, en secondes. En dessous, on freine normalement : la roue avant se mérite en gardant le frein serré.")]
-        public float stoppieBrakeHoldTime = 0.35f;
+        public float stoppieBrakeHoldTime = 0.5f;
         [Tooltip("Une fois ce délai passé, temps pendant lequel la levée de l'arrière monte en puissance, en secondes.")]
-        public float stoppieEngageTime = 0.15f;
+        public float stoppieEngageTime = 0.3f;
         [Tooltip("Vitesse (m/s) à partir de laquelle FREIN AV lève l'arrière à pleine force (11 : 40 km/h). La levée faiblit en dessous.")]
         public float stoppieFullLiftSpeed = 11f;
         [Tooltip("Amortissement de la roue avant : plus élevé que celui du wheeling, la moto y reste docile.")]
@@ -259,7 +269,7 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Angle de chute vers l'avant.")]
         public float stoppieFallAngle = 45f;
         [Tooltip("Levée de l'arrière par FREIN AV à pleine vitesse, en degrés/s² : proportionnelle à la vitesse, il faut freiner fort en roulant vite.")]
-        public float stoppieLiftTorque = 350f;
+        public float stoppieLiftTorque = 280f;
         [Tooltip("Levée par FREIN AV une fois dans la zone d'équilibre : modérée, pour pouvoir doser.")]
         public float stoppieHoldTorque = 40f;
         [Tooltip("Retour de l'arrière vers le sol quand on relâche FREIN AV.")]
@@ -280,8 +290,10 @@ namespace WheelingMoto.Gameplay
         public float fallRotateSpeed = 150f;
         [Tooltip("Sans moto physique : angle atteint par le basculement visuel.")]
         public float fallVisualAngle = 95f;
-        [Tooltip("Vitesse d'impact contre un obstacle au-delà de laquelle le pilote passe par-dessus, en m/s (8 : environ 29 km/h). Seule compte la vitesse dirigée vers l'obstacle : frotter un mur en biais ne fait pas tomber.")]
+        [Tooltip("Vitesse d'impact contre un obstacle au-delà de laquelle le pilote passe par-dessus, en m/s (8 : environ 29 km/h). Seule compte la vitesse dirigée vers l'obstacle : sous wallScrapeCrashSpeed, frotter un mur en biais ne fait pas tomber.")]
         public float wallCrashSpeed = 8f;
+        [Tooltip("Vitesse au-delà de laquelle tout contact avec un obstacle fait tomber, même pris de biais, en m/s (14 : environ 50 km/h). En virage, on aborde un mur sous un angle faible : la vitesse dirigée vers lui reste sous wallCrashSpeed quelle que soit la vitesse de la moto. En dessous de ce seuil, frotter un mur en biais reste permis.")]
+        public float wallScrapeCrashSpeed = 14f;
         [Tooltip("Vitesse de chute verticale au-delà de laquelle la réception est manquée, en m/s (18 : environ 6 m de haut).")]
         public float hardLandingSpeed = 18f;
         [Tooltip("Petit élan du pilote qui quitte la selle, même au pas, en m/s.")]
@@ -320,6 +332,13 @@ namespace WheelingMoto.Gameplay
         // Part de la rotation « roue avant bloquée » transmise à la moto qui percute un mur : la fourche et
         // le pneu encaissent le reste.
         const float WallEndoShare = 0.35f;
+        // Part minimale de la vitesse dirigée vers un obstacle pour parler de contact : en dessous (un degré), la
+        // moto le longe.
+        const float WallContactMinApproach = 0.02f;
+        // Corps du pilote penché : hauteurs des sondages le long de la moto inclinée (hanches, buste, tête), et
+        // inclinaison sous laquelle il ne sort pas de la capsule du contrôleur.
+        static readonly float[] LeanProbeHeights = { 0.85f, 1.2f, 1.55f };
+        const float LeanProbeMinAngle = 10f;
         // Inclinaison (degrés) et vitesse d'inclinaison (degrés/s) en dessous desquelles la moto est tenue
         // pour droite au moment de la chute.
         const float FallSideLean = 3f;
@@ -371,6 +390,11 @@ namespace WheelingMoto.Gameplay
         CrashCause crashCause;
         // Côté où la moto part se coucher, dans le sens de l'inclinaison (+1 : penchée à gauche).
         float fallSide = 1f;
+        // Part de la vitesse dirigée vers l'obstacle au dernier choc : un mur pris de biais ne fait ni cabrer la moto
+        // ni voler le pilote comme un mur pris de face.
+        float wallApproach = 1f;
+        // Obstacle touché par le flanc de la capsule pendant Move : la chute attend la fin du déplacement.
+        float? sideWallCrash;
         RiderEjection riderEjection;
         MotoRagdoll wreck;
         MotoStats stats;
@@ -380,6 +404,9 @@ namespace WheelingMoto.Gameplay
         bool wheelieNeedsRelease;
         // Temps passé FREIN AV serré, roue avant au sol : la roue avant ne vient qu'après un appui prolongé.
         float brakeHeldFor;
+        // Serrage de chaque frein, de 0 (relâché) à 1 (à fond) : les freins mordent progressivement.
+        float frontBrakePressure;
+        float mainBrakePressure;
 
         // Entrées tactiles (HUD) et clavier (test PC), fusionnées à chaque frame.
         bool touchThrottle, touchFrontBrake, touchRearBrake, touchLift;
@@ -388,7 +415,9 @@ namespace WheelingMoto.Gameplay
         float keySteer;
 
         bool Lift => touchLift || keyLift;
-        bool Accelerate => touchThrottle || keyThrottle || Lift;
+        /// <summary>GAZ seul, sans LEVER.</summary>
+        bool ThrottleHeld => touchThrottle || keyThrottle;
+        bool Accelerate => ThrottleHeld || Lift;
         bool FrontBrake => touchFrontBrake || keyFrontBrake;
         bool RearBrake => touchRearBrake || keyRearBrake;
         /// <summary>L'un ou l'autre des freins : feu stop, marche arrière à l'arrêt.</summary>
@@ -864,8 +893,8 @@ namespace WheelingMoto.Gameplay
         }
 
         /// <summary>
-        /// Clavier pour tester sur PC : ZQSD/WASD ou flèches ; espace = LEVER ; S ou flèche bas = frein avant,
-        /// X ou Maj gauche = frein arrière ; R = repartir après une chute.
+        /// Clavier pour tester sur PC : ZQSD/WASD ou flèches ; espace = LEVER ; flèche bas ou S = FREIN, le frein
+        /// principal ; X ou Maj gauche = FREIN AV ; R = repartir après une chute.
         /// </summary>
         void ReadKeyboard()
         {
@@ -875,8 +904,8 @@ namespace WheelingMoto.Gameplay
 
             if (isFallen && kb.rKey.wasPressedThisFrame) RequestRespawn();
             keyThrottle = kb.wKey.isPressed || kb.zKey.isPressed || kb.upArrowKey.isPressed;
-            keyFrontBrake = kb.sKey.isPressed || kb.downArrowKey.isPressed;
-            keyRearBrake = kb.xKey.isPressed || kb.leftShiftKey.isPressed;
+            keyRearBrake = kb.sKey.isPressed || kb.downArrowKey.isPressed;
+            keyFrontBrake = kb.xKey.isPressed || kb.leftShiftKey.isPressed;
             keyLift = kb.spaceKey.isPressed;
 
             bool left = kb.aKey.isPressed || kb.qKey.isPressed || kb.leftArrowKey.isPressed;
@@ -885,8 +914,8 @@ namespace WheelingMoto.Gameplay
 #else
             if (isFallen && Input.GetKeyDown(KeyCode.R)) RequestRespawn();
             keyThrottle = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.Z) || Input.GetKey(KeyCode.UpArrow);
-            keyFrontBrake = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
-            keyRearBrake = Input.GetKey(KeyCode.X) || Input.GetKey(KeyCode.LeftShift);
+            keyRearBrake = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
+            keyFrontBrake = Input.GetKey(KeyCode.X) || Input.GetKey(KeyCode.LeftShift);
             keyLift = Input.GetKey(KeyCode.Space);
 
             bool left = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.Q) || Input.GetKey(KeyCode.LeftArrow);
@@ -906,6 +935,13 @@ namespace WheelingMoto.Gameplay
             float speed = Mathf.Abs(currentSpeed);
             float resistance = drivetrain.Resistance(speed);
             bool stopped = currentSpeed <= 0.05f;
+
+            // Les freins se serrent en une fraction de seconde au lieu de mordre d'un coup : l'avant, plus
+            // progressif, se dose ; le principal mord vite.
+            frontBrakePressure = Mathf.MoveTowards(frontBrakePressure, FrontBrake ? 1f : 0f,
+                dt / Mathf.Max(0.01f, FrontBrake ? frontBrakeApplyTime : brakeReleaseTime));
+            mainBrakePressure = Mathf.MoveTowards(mainBrakePressure, RearBrake ? 1f : 0f,
+                dt / Mathf.Max(0.01f, RearBrake ? mainBrakeApplyTime : brakeReleaseTime));
             // Le frein arrière coupe les gaz comme celui de l'avant. Sans cela, la poussée d'un gros moteur
             // dépassait à elle seule le freinage : le joueur tenait le frein et la moto continuait d'accélérer,
             // ce qui donnait une commande d'apparence inopérante.
@@ -913,7 +949,10 @@ namespace WheelingMoto.Gameplay
             // tenu. C'est gaz grand ouverts et frein dosé qui tiennent un wheeling, et couper la poussée
             // reposerait la roue à chaque appui.
             bool modulatingWheelie = wheelieAngle > 0f || Lift;
-            bool driving = Accelerate && currentSpeed >= 0f && !FrontBrake && !(RearBrake && !modulatingWheelie);
+            // Le frein avant ne coupe les gaz que roue avant au sol : en wheeling, il ne fait qu'arrêter une roue
+            // qui tourne dans le vide.
+            bool frontBrakeCutsThrottle = FrontBrake && wheelieAngle <= 1f;
+            bool driving = Accelerate && currentSpeed >= 0f && !frontBrakeCutsThrottle && !(RearBrake && !modulatingWheelie);
             // Avec LEVER, embrayage lâché : le pneu arrière tire plus fort, la roue avant se lève.
             float thrust = drivetrain.Drive(speed, driving, Lift ? liftAccelerationBoost : 1f, dt);
             float braking = BrakingDeceleration();
@@ -960,12 +999,14 @@ namespace WheelingMoto.Gameplay
         /// </summary>
         float BrakingDeceleration()
         {
-            if (!Brake) return 0f;
+            if (frontBrakePressure <= 0f && mainBrakePressure <= 0f) return 0f;
 
-            float front = FrontBrake ? stats.BrakingMps2 * frontBrakeShare * (1f - FrontWheelUp()) : 0f;
-            float rear = RearBrake ? stats.BrakingMps2 * rearBrakeShare * (1f - RearWheelUp()) : 0f;
-            float total = Mathf.Min(front + rear, stats.BrakingMps2);
-            return Mathf.Lerp(total, FrontBrake ? stoppieBrakeDeceleration : 0f, RearWheelUp());
+            float front = stats.BrakingMps2 * frontBrakeShare * frontBrakePressure * (1f - FrontWheelUp());
+            // En wheeling, le frein principal dose la roue : il ne garde qu'une part de son mordant.
+            float wheelie = Mathf.Lerp(1f, wheelieBrakeDecelShare, FrontWheelUp());
+            float main = stats.BrakingMps2 * rearBrakeShare * mainBrakePressure * wheelie * (1f - RearWheelUp());
+            float total = Mathf.Min(front + main, stats.BrakingMps2 * Mathf.Max(frontBrakeShare, rearBrakeShare));
+            return Mathf.Lerp(total, stoppieBrakeDeceleration * frontBrakePressure, RearWheelUp());
         }
 
         /// <summary>
@@ -1019,6 +1060,11 @@ namespace WheelingMoto.Gameplay
             if (Lift && !wheelieNeedsRelease && fastEnough && stoppieAngle <= 0f)
             {
                 torque += WheelieLiftTorqueAt(wheelieAngle);
+            }
+            else if (ThrottleHeld && wheelieAngle > 1f && fastEnough && stoppieAngle <= 0f)
+            {
+                // GAZ seul, roue déjà levée : les gaz ouverts la soutiennent, on peut accélérer en wheeling.
+                torque += wheelieThrottleHoldTorque;
             }
 
             if (!fastEnough && wheelieAngle > 0f)
@@ -1132,7 +1178,7 @@ namespace WheelingMoto.Gameplay
                 {
                     float speedFactor = Mathf.InverseLerp(stoppieMinSpeed, stoppieFullLiftSpeed, currentSpeed);
                     float blend = Mathf.InverseLerp(stoppieSweetMin * 0.5f, stoppieSweetMin, stoppieAngle);
-                    torque += Mathf.Lerp(stoppieLiftTorque * speedFactor * engage, stoppieHoldTorque, blend);
+                    torque += Mathf.Lerp(stoppieLiftTorque * speedFactor * engage * frontBrakePressure, stoppieHoldTorque, blend);
                 }
                 else if (stoppieAngle > 0f)
                 {
@@ -1236,9 +1282,16 @@ namespace WheelingMoto.Gameplay
             }
 
             LimitAgainstWalls(dt);
+            CheckLeaningRider(dt);
             Vector3 motion = transform.forward * currentSpeed + Vector3.up * verticalSpeed;
+            sideWallCrash = null;
             CollisionFlags flags = body.Move(motion * dt);
 
+            if (sideWallCrash.HasValue)
+            {
+                CrashAgainstWall(sideWallCrash.Value);
+                return;
+            }
             if ((flags & CollisionFlags.Sides) != 0)
             {
                 currentSpeed = Mathf.Clamp(currentSpeed, -wallImpactSpeed, wallImpactSpeed);
@@ -1266,6 +1319,7 @@ namespace WheelingMoto.Gameplay
                 : (UnityEngine.Random.value < 0.5f ? -1f : 1f);
             // Commandes relâchées : un bouton resté enfoncé ne doit rien piloter d'une moto à terre.
             touchThrottle = touchFrontBrake = touchRearBrake = touchLift = false;
+            frontBrakePressure = mainBrakePressure = 0f;
             touchSteer = 0f;
 
             // Moto d'abord : le pilote a besoin de ses formes pour ne pas s'y cogner en partant.
@@ -1314,8 +1368,8 @@ namespace WheelingMoto.Gameplay
 
             if (cause == CrashCause.Wall)
             {
-                // La roue avant bute : l'arrière monte d'autant plus vite que le choc est rapide.
-                spin += right * (Mathf.Abs(currentSpeed) / Mathf.Max(0.5f, wheelbase) * Mathf.Rad2Deg * WallEndoShare);
+                // La roue avant bute : l'arrière monte d'autant plus vite que le choc est rapide et pris de face.
+                spin += right * (Mathf.Abs(currentSpeed) * wallApproach / Mathf.Max(0.5f, wheelbase) * Mathf.Rad2Deg * WallEndoShare);
             }
             // Au sol, verticalSpeed n'est que la petite poussée qui plaque le CharacterController sur la route :
             // la transmettre enfoncerait la moto dans la chaussée. Seules comptent une vraie chute en l'air, ou
@@ -1342,10 +1396,12 @@ namespace WheelingMoto.Gameplay
             float share = Mathf.Clamp01(pace / Mathf.Max(0.1f, handlingFullSpeed));
             bool backwards = cause == CrashCause.Wheelie;
             float throwForward = backwards ? -1f : 1f;
+            // Un mur pris de biais arrache le pilote de la selle sans le catapulter par-dessus le guidon.
+            float vault = pace * riderVaultShare * (cause == CrashCause.Wall ? wallApproach : 1f);
 
             Vector3 velocity = transform.forward * (speed + riderEjectSpeed * throwForward)
                 // Basculé en arrière, le pilote tombe de la selle plus qu'il ne saute.
-                + Vector3.up * (backwards ? riderEjectSpeed * 0.5f : riderEjectSpeed + pace * riderVaultShare);
+                + Vector3.up * (backwards ? riderEjectSpeed * 0.5f : riderEjectSpeed + vault);
             // Roulé-boulé dans le sens de l'éjection (tourner autour de l'axe droite bascule le corps vers l'avant).
             float roll = riderEjectSpin * Mathf.Lerp(0.2f, 1f, share);
             Vector3 spin = transform.right * (roll * throwForward) + transform.forward * (roll * 0.3f * fallSide);
@@ -1659,17 +1715,100 @@ namespace WheelingMoto.Gameplay
             float free = Mathf.Max(0f, nearest - colliderRadius - overhang);
             if (free >= travel) return;
 
-            // Pris de plein fouet, le mur envoie le pilote par-dessus le guidon ; au pas, la moto vient
-            // simplement buter contre lui au lieu de le traverser ou de monter dessus. Seule compte la vitesse
-            // dirigée vers le mur : en biais, on le frotte, on ne le percute pas.
-            Vector3 facing = Vector3.ProjectOnPlane(-wallNormal, Vector3.up).normalized;
-            float impactSpeed = Mathf.Abs(currentSpeed) * Mathf.Max(0f, Vector3.Dot(transform.forward * sign, facing));
-            if (!isFallen && impactSpeed >= wallCrashSpeed)
+            // Pris de plein fouet ou en roulant vite, le mur fait tomber (voir IsWallCrash) ; au pas, la moto vient
+            // simplement buter contre lui au lieu de le traverser ou de monter dessus.
+            float approach = WallApproach(wallNormal);
+            if (!isFallen && IsWallCrash(approach))
             {
-                Crash(CrashCause.Wall);
+                CrashAgainstWall(approach);
                 return;
             }
             currentSpeed = free <= 0.01f ? 0f : sign * free / Mathf.Max(dt, 0.0001f);
+        }
+
+        /// <summary>
+        /// Corps du pilote penché en virage. La capsule du contrôleur reste droite, mais le pilote déborde de plus d'un
+        /// mètre vers l'intérieur du virage à hauteur de tête : justement du côté du mur vers lequel on tourne. Sans
+        /// ce sondage, le buste traversait le mur un dixième de seconde avant que la capsule ne le touche, et un
+        /// coup de guidon pour s'en écarter laissait repartir comme si de rien n'était.
+        ///
+        /// Chaque sondage part de l'aplomb de la moto, dans la capsule, et balaie jusqu'au point du corps penché,
+        /// déplacement de la frame compris. Le corps qui heurte un obstacle en roulant vite fait tomber, même s'il le
+        /// longe : c'est l'épaule qui touche, pas la roue. Sous wallScrapeCrashSpeed, l'inclinaison reste faible et le
+        /// sondage ne sert pas.
+        /// </summary>
+        void CheckLeaningRider(float dt)
+        {
+            if (isFallen || Mathf.Abs(currentLean) < LeanProbeMinAngle || Mathf.Abs(currentSpeed) < wallScrapeCrashSpeed) return;
+
+            // Même inclinaison que le pivot visuel, autour de l'axe des roues (rotation Z positive : penchée à gauche).
+            float lean = currentLean * Mathf.Deg2Rad;
+            Vector3 leanUp = transform.TransformDirection(new Vector3(-Mathf.Sin(lean), Mathf.Cos(lean), 0f));
+            Vector3 travel = transform.forward * (currentSpeed * dt);
+
+            foreach (float height in LeanProbeHeights)
+            {
+                Vector3 start = transform.position + Vector3.up * (leanUp.y * height);
+                Vector3 sweep = transform.position + leanUp * height + travel - start;
+                float length = sweep.magnitude;
+                if (length < 0.001f) continue;
+
+                int count = Physics.SphereCastNonAlloc(start, wallProbeRadius, sweep / length, probeHits, length,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                for (int i = 0; i < count; i++)
+                {
+                    RaycastHit hit = probeHits[i];
+                    if (hit.collider == body || hit.distance <= 0f) continue;
+                    if (Vector3.Angle(hit.normal, Vector3.up) < maxClimbSlope) continue;
+
+                    CrashAgainstWall(WallApproach(hit.normal));
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Flanc de la capsule contre un obstacle, pendant Move. Les sondages ne suivent que l'axe de la moto : un
+        /// obstacle pris par le côté n'était arrêté que par la capsule, qui ramenait la vitesse à wallImpactSpeed sans
+        /// jamais faire tomber. La chute attend la fin du déplacement (voir ApplyMovement) : libérer la moto et le
+        /// pilote pendant que le contrôleur bouge n'est pas sûr.
+        /// </summary>
+        void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            if (isFallen || sideWallCrash.HasValue) return;
+            // Sol, pente gravissable ou bordure de trottoir que la capsule enjambe : rien à percuter.
+            if (Vector3.Angle(hit.normal, Vector3.up) < maxClimbSlope || hit.point.y < transform.position.y + stepHeight) return;
+
+            float approach = WallApproach(hit.normal);
+            if (IsWallCrash(approach)) sideWallCrash = approach;
+        }
+
+        /// <summary>Part de la vitesse dirigée vers un obstacle, de 0 (on le longe, ou on s'en éloigne) à 1 (de face).</summary>
+        float WallApproach(Vector3 wallNormal)
+        {
+            Vector3 facing = Vector3.ProjectOnPlane(-wallNormal, Vector3.up).normalized;
+            return Mathf.Max(0f, Vector3.Dot(transform.forward * Mathf.Sign(currentSpeed), facing));
+        }
+
+        /// <summary>
+        /// Un obstacle fait tomber s'il est pris franchement (vitesse dirigée vers lui au-delà de wallCrashSpeed), ou
+        /// dès qu'on le touche en roulant vite (au-delà de wallScrapeCrashSpeed), sous n'importe quel angle.
+        ///
+        /// Le premier critère ne suffisait pas : en virage, la vitesse dirigée vers le mur vaut g·tan(inclinaison)
+        /// multiplié par la durée du virage, et ne dépend pas de la vitesse de la moto. Un mur à trois mètres pris en
+        /// tournant à fond arrivait à 7,5 m/s, à 100 comme à 300 km/h : la moto s'y arrêtait net, sans tomber.
+        /// </summary>
+        bool IsWallCrash(float approach)
+        {
+            if (approach <= WallContactMinApproach) return false;
+            float speed = Mathf.Abs(currentSpeed);
+            return speed * approach >= wallCrashSpeed || speed >= wallScrapeCrashSpeed;
+        }
+
+        void CrashAgainstWall(float approach)
+        {
+            wallApproach = approach;
+            Crash(CrashCause.Wall);
         }
 
         /// <summary>Tour de roue : distance parcourue divisée par le rayon réel.</summary>

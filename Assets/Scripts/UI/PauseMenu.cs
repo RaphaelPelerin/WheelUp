@@ -108,11 +108,15 @@ namespace WheelingMoto.UI
             root.transform.SetAsLastSibling();
         }
 
-        /// <summary>Retour en arrière : des Paramètres vers la pause, de la pause vers le jeu.</summary>
+        /// <summary>
+        /// Retour en arrière : de l'éditeur de disposition vers les Paramètres (sans enregistrer), des Paramètres
+        /// vers la pause, de la pause vers le jeu.
+        /// </summary>
         public void Back()
         {
             if (!open) return;
-            if (settingsView.activeSelf) ShowCard();
+            if (ControlLayoutEditor.Showing) ControlLayoutEditor.Cancel();
+            else if (settingsView.activeSelf) ShowCard();
             else Close();
         }
 

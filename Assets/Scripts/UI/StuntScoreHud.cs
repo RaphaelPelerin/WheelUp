@@ -232,7 +232,7 @@ namespace WheelingMoto.UI
         /// à ce texte sa propre copie du matériau, sinon le liseré gagnerait toute l'interface ; la marge du
         /// maillage est recalculée derrière, sans quoi le trait serait rogné.
         /// </summary>
-        static TextMeshProUGUI Outlined(TextMeshProUGUI text, float width)
+        internal static TextMeshProUGUI Outlined(TextMeshProUGUI text, float width)
         {
             Material material = text.fontMaterial;
             material.SetColor(ShaderUtilities.ID_OutlineColor, new Color(0f, 0f, 0f, 0.8f));
