@@ -31,6 +31,7 @@ namespace WheelingMoto.Gameplay
         const float StoppieMinDuration = 1.2f;
 
         MotorcycleController controller;
+        StuntScorer scorer;
         float flushTimer;
         float wheelieStreak;
         float stoppieStreak;
@@ -54,6 +55,10 @@ namespace WheelingMoto.Gameplay
         void Awake()
         {
             if (controller == null) controller = GetComponent<MotorcycleController>();
+
+            // Le compteur de prouesses vit sur la moto, comme ce collecteur : Attach le pose s'il
+            // manque et rend celui qui existe déjà.
+            scorer = StuntScorer.Attach(controller);
         }
 
         void OnEnable()
@@ -108,6 +113,11 @@ namespace WheelingMoto.Gameplay
             }
 
             MissionTracker.ReportBest(MissionMetric.TopSpeed, controller.SpeedKmh);
+
+            // Les points de prouesse ne sont pas une grandeur de mission : ils ne servent ni aux
+            // objectifs ni aux succès, seulement à l'XP versée en fin de session. D'où ce chemin à
+            // part, qui recopie le total plutôt que de cumuler des rapports.
+            if (scorer != null) MissionTracker.ReportStuntTotal(scorer.Total);
 
             MeasureWheelie(dt, forwardSpeed, fallen);
             MeasureStoppie(dt, fallen);

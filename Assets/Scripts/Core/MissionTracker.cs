@@ -25,6 +25,12 @@ namespace WheelingMoto.Core
         /// <summary>Pièces des missions bouclées, qui attendent d'être récupérées dans le menu.</summary>
         public int CoinsPending;
 
+        /// <summary>Points de prouesse de la session, tenus à jour par le collecteur.</summary>
+        public int StuntPoints;
+
+        /// <summary>XP tiré de ces points à la clôture de la session.</summary>
+        public int XpEarned;
+
         public float Get(MissionMetric metric) => values.TryGetValue(metric, out float value) ? value : 0f;
 
         public void Add(MissionMetric metric, float amount) => values[metric] = Get(metric) + amount;
@@ -75,6 +81,16 @@ namespace WheelingMoto.Core
             // Une partie lancée compte immédiatement : le joueur ne doit pas avoir à rouler pour que
             // « lance 3 parties » avance.
             ReportEvent(MissionMetric.SessionsPlayed);
+        }
+
+        /// <summary>
+        /// Recopie le total de prouesses de la session en cours. Appelé pendant la conduite plutôt
+        /// qu'à la clôture : le collecteur disparaît avec la scène, et à ce moment-là le bilan est
+        /// déjà figé.
+        /// </summary>
+        public static void ReportStuntTotal(int points)
+        {
+            if (CurrentRun != null) CurrentRun.StuntPoints = points;
         }
 
         /// <summary>Clôt la session, vide le tampon et rend le bilan à afficher.</summary>

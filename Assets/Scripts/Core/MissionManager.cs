@@ -186,6 +186,11 @@ namespace WheelingMoto.Core
             mission.Claimed = true;
             EconomyManager.AddCoins(mission.Coins);
 
+            // L'XP tombe à la récupération, pas à l'achèvement : boucler et encaisser sont deux gestes
+            // séparés dans ce jeu, et c'est l'encaissement qui paie. Les deux monnaies suivent donc la
+            // même règle, sans quoi le joueur monterait de niveau sans rien avoir réclamé.
+            LevelManager.AddXp(LevelRewardCatalog.MissionXp(mission.Template.Scope, mission.Tier));
+
             Save();
             PlayerPrefs.Save();
             return true;

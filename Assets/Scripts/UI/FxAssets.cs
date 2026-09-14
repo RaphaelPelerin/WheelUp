@@ -16,6 +16,7 @@ namespace WheelingMoto.UI
         static Mesh quadMesh;
         static Sprite glowSprite;
         static Sprite chevronSprite;
+        static Sprite discSprite;
         static Material dotMaterial;
         static Material ringMaterial;
         static Material chipMaterial;
@@ -62,6 +63,28 @@ namespace WheelingMoto.UI
                         new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
                 }
                 return glowSprite;
+            }
+        }
+
+        /// <summary>
+        /// Disque plein à bord net, pour les pastilles rondes de l'interface — les nœuds de la route
+        /// des paliers. Le sprite arrondi de <c>UIFactory</c> est un rectangle à coins adoucis : étiré
+        /// au carré il donne un galet, jamais un cercle.
+        ///
+        /// La marche est étalée sur la largeur d'un pixel ou deux du bord plutôt que posée net, pour
+        /// que le cercle ne soit pas crénelé aux tailles où on l'affiche.
+        /// </summary>
+        public static Sprite Disc
+        {
+            get
+            {
+                if (discSprite == null)
+                {
+                    var texture = Radial(128, r => Mathf.Clamp01((1f - r) * 64f));
+                    discSprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+                }
+                return discSprite;
             }
         }
 

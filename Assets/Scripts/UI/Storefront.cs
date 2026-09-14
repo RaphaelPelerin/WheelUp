@@ -38,9 +38,64 @@ namespace WheelingMoto.UI
     }
 
     /// <summary>
-    /// Mise en page commune aux deux vitrines (Coffres et Boutique). Elle vit ici plutôt que dans
-    /// chaque onglet pour que les deux gardent exactement la même bannière et les mêmes cartes :
-    /// dupliquer les mesures, c'est se garantir qu'elles divergeront à la première retouche.
+    /// Grande carte d'une vitrine : celle de l'offre mise en avant. Elle a la place d'écrire ce que
+    /// la carte ordinaire cache derrière son bouton « i » — d'où le chiffre en gros et la mention,
+    /// et d'où l'absence de pastille « i ».
+    /// </summary>
+    public class StorefrontHeroCard
+    {
+        public Image Panel;
+        public RectTransform Preview;
+        public TextMeshProUGUI Name;
+        /// <summary>Le chiffre qui porte l'offre : le total de pièces d'un lot.</summary>
+        public TextMeshProUGUI Headline;
+        public TextMeshProUGUI Ribbon;
+        public Button Action;
+        public TextMeshProUGUI ActionLabel;
+
+        Image bonusBadge;
+        TextMeshProUGUI bonusLabel;
+
+        public void BindBonus(Image badge, TextMeshProUGUI label)
+        {
+            bonusBadge = badge;
+            bonusLabel = label;
+        }
+
+        /// <summary>Mention en pastille sous le chiffre. Vide : la pastille disparaît au lieu de rester vide.</summary>
+        public void SetBonus(string text)
+        {
+            bool shown = !string.IsNullOrEmpty(text);
+            if (bonusBadge != null) bonusBadge.gameObject.SetActive(shown);
+            if (bonusLabel != null && shown) bonusLabel.text = text;
+        }
+    }
+
+    /// <summary>
+    /// Bande pleine largeur posée sous la rangée, pour une offre qui n'est pas du même ordre que les
+    /// cartes — le retrait des publicités, qui ne s'achète qu'une fois et ne se compare à aucun lot.
+    /// La mettre en carte parmi les cartes la faisait passer pour une marchandise de plus.
+    /// </summary>
+    public class StorefrontBand
+    {
+        public Image Panel;
+        public Image Rule;
+        public TextMeshProUGUI Title;
+        public TextMeshProUGUI Body;
+        public Button Action;
+        public TextMeshProUGUI ActionLabel;
+    }
+
+    /// <summary>
+    /// Briques communes aux deux vitrines (Coffres et Boutique) : la bannière, la rangée, la carte,
+    /// la carte héros, la bande et le halo d'aperçu. Elles vivent ici plutôt que dans chaque onglet
+    /// pour que les deux vitrines soient faites de la même matière — dupliquer les mesures, c'est se
+    /// garantir qu'elles divergeront à la première retouche.
+    ///
+    /// Ce sont bien des briques et non une mise en page imposée : chaque onglet les assemble à sa
+    /// façon. Les Coffres alignent trois cartes égales ; la Boutique met un lot en avant sur une
+    /// carte héros et range les autres à côté, parce qu'une vitrine qui vend en argent réel doit
+    /// désigner l'offre à regarder, là où trois coffres sont trois choix de même rang.
     ///
     /// La carte se lit de bas en haut : le bouton, puis la mention, la description et le nom
     /// s'empilent au-dessus de lui à hauteur fixe, et l'aperçu prend tout ce qui reste. Dans l'autre
@@ -66,6 +121,29 @@ namespace WheelingMoto.UI
         /// <summary>Hauteur réservée au bloc de texte : l'aperçu commence juste au-dessus.</summary>
         public const float PreviewBottom = NameBottom + NameHeight + 14f;
 
+        /// <summary>Hauteur de la bande, gouttière comprise : ce que la rangée doit lui céder en bas.</summary>
+        public const float BandHeight = 108f;
+        public const float BandReserve = BandHeight + CardGap;
+
+        // Mesures de la carte héros. Même lecture de bas en haut que la carte ordinaire, mais tout
+        // est plus grand d'un cran et la mention s'écrit sur la carte au lieu de partir dans le « i ».
+        const float HeroPadding = 28f;
+        const float HeroButtonBottom = 24f;
+        const float HeroButtonHeight = 72f;
+        const float HeroButtonTop = HeroButtonBottom + HeroButtonHeight;
+        const float HeroBonusBottom = HeroButtonTop + 18f;
+        const float HeroBonusHeight = 42f;
+        const float HeroHeadlineBottom = HeroBonusBottom + HeroBonusHeight + 14f;
+        const float HeroHeadlineHeight = 64f;
+        const float HeroNameBottom = HeroHeadlineBottom + HeroHeadlineHeight + 2f;
+        const float HeroNameHeight = 42f;
+        const float HeroPreviewBottom = HeroNameBottom + HeroNameHeight + 16f;
+
+        const float RibbonWidth = 268f;
+        const float RibbonHeight = 46f;
+        /// <summary>Épaisseur du liseré qui entoure la carte héros, dessiné par un panneau plus grand dessous.</summary>
+        const float HeroOutline = 3f;
+
         /// <summary>Bandeau de titre, identique d'un onglet à l'autre.</summary>
         public static void BuildHeader(Transform root, UITheme theme, string title, string subtitle)
         {
@@ -81,12 +159,16 @@ namespace WheelingMoto.UI
         /// Rangée qui accueille les cartes. Les marges extérieures sont portées par la rangée et non
         /// par les cartes : sinon les cartes de bord perdraient la marge en plus de la demi-gouttière
         /// et seraient plus étroites que celle du milieu, qui ne perd que deux demi-gouttières.
+        ///
+        /// <paramref name="bottom"/> relève le bas de la rangée pour laisser la place à ce qui vient
+        /// dessous — une bande, par exemple. Laissé à sa valeur par défaut, la rangée descend jusqu'à
+        /// la marge basse de l'écran, comme dans l'onglet Coffres.
         /// </summary>
-        public static RectTransform BuildRow(Transform root, string name)
+        public static RectTransform BuildRow(Transform root, string name, float bottom = BottomMargin)
         {
             var row = UIFactory.CreateUIObject(name, root);
             UIFactory.SetRect(row, Vector2.zero, Vector2.one,
-                new Vector2(SideMargin, BottomMargin), new Vector2(-SideMargin, -HeaderHeight));
+                new Vector2(SideMargin, bottom), new Vector2(-SideMargin, -HeaderHeight));
             return row;
         }
 
@@ -134,6 +216,149 @@ namespace WheelingMoto.UI
             };
             card.SetInfo(description, note);
             return card;
+        }
+
+        /// <summary>
+        /// Carte héros, posée dans une rangée dont elle occupe la fraction <paramref name="width"/> à
+        /// gauche. <paramref name="tint"/> est la couleur de l'offre : elle ne sert qu'à réchauffer
+        /// imperceptiblement le fond, pour que la carte ne soit pas du même gris que les autres.
+        /// </summary>
+        public static StorefrontHeroCard BuildHeroCard(Transform row, UITheme theme, float width, string id,
+            string name, string headline, string ribbon, string actionText, Color tint, UnityAction onAction)
+        {
+            var anchorMax = new Vector2(width, 1);
+
+            // Liseré : un panneau arrondi légèrement plus grand, glissé dessous. Un contour dessiné
+            // par un composant Outline suivrait le rectangle et non les coins arrondis du sprite.
+            var outline = UIFactory.AddPanel(row, "HeroOutline_" + id,
+                new Color(theme.Accent.r, theme.Accent.g, theme.Accent.b, 0.7f),
+                Vector2.zero, anchorMax,
+                new Vector2(-HeroOutline, -HeroOutline), new Vector2(-CardGap * 0.5f + HeroOutline, HeroOutline),
+                rounded: true);
+            outline.raycastTarget = false;
+
+            var panel = UIFactory.AddPanel(row, "Hero_" + id, Color.Lerp(theme.Panel, tint, 0.07f),
+                Vector2.zero, anchorMax,
+                Vector2.zero, new Vector2(-CardGap * 0.5f, 0),
+                rounded: true);
+            panel.raycastTarget = false;
+
+            var preview = UIFactory.CreateUIObject("Preview", panel.transform);
+            UIFactory.SetRect(preview, Vector2.zero, Vector2.one,
+                new Vector2(24, HeroPreviewBottom), new Vector2(-24, -24));
+
+            var nameText = UIFactory.AddText(panel.transform, "Name", name, UITheme.FontHeading, theme.TextMuted,
+                TextAnchor.MiddleLeft, new Vector2(0, 0), new Vector2(1, 0),
+                new Vector2(HeroPadding, HeroNameBottom), new Vector2(-HeroPadding, HeroNameBottom + HeroNameHeight),
+                FontStyles.Bold | FontStyles.Italic);
+
+            var headlineText = UIFactory.AddText(panel.transform, "Headline", headline, UITheme.FontDisplay, theme.Text,
+                TextAnchor.MiddleLeft, new Vector2(0, 0), new Vector2(1, 0),
+                new Vector2(HeroPadding, HeroHeadlineBottom),
+                new Vector2(-HeroPadding, HeroHeadlineBottom + HeroHeadlineHeight),
+                FontStyles.Bold | FontStyles.Italic);
+
+            // Pastille de mention : sa largeur suit le texte, d'où le ContentSizeFitter plutôt qu'une
+            // mesure fixe — « + 750 offertes » et « + 4 000 offertes · 27 % » n'ont pas la même longueur.
+            // Le pivot passe à gauche : avec le pivot centré des autres éléments, la pastille
+            // s'élargirait des deux côtés et quitterait l'alignement des textes au-dessus d'elle.
+            var badge = UIFactory.AddPanel(panel.transform, "BonusBadge",
+                new Color(theme.Coin.r, theme.Coin.g, theme.Coin.b, 0.16f),
+                new Vector2(0, 0), new Vector2(0, 0), Vector2.zero, Vector2.zero, rounded: true);
+            badge.raycastTarget = false;
+
+            var badgeRect = badge.rectTransform;
+            badgeRect.pivot = new Vector2(0f, 0.5f);
+            badgeRect.anchoredPosition = new Vector2(HeroPadding, HeroBonusBottom + HeroBonusHeight * 0.5f);
+            badgeRect.sizeDelta = new Vector2(0f, HeroBonusHeight);
+
+            var badgeLayout = badge.gameObject.AddComponent<HorizontalLayoutGroup>();
+            badgeLayout.padding = new RectOffset(18, 18, 0, 0);
+            badgeLayout.childForceExpandWidth = false;
+            badgeLayout.childForceExpandHeight = true;
+
+            var badgeFitter = badge.gameObject.AddComponent<ContentSizeFitter>();
+            badgeFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            badgeFitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            var bonusText = UIFactory.AddText(badge.transform, "BonusLabel", string.Empty, UITheme.FontLabel,
+                theme.Coin, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+                FontStyles.Bold | FontStyles.Italic);
+
+            var button = UIFactory.AddButton(panel.transform, "Action", actionText, theme.Accent, Color.white,
+                UITheme.FontBody, new Vector2(0, 0), new Vector2(1, 0),
+                new Vector2(24, HeroButtonBottom), new Vector2(-24, HeroButtonTop),
+                onAction, ButtonKind.Primary);
+
+            var ribbonPanel = UIFactory.AddPanel(panel.transform, "Ribbon", theme.Accent,
+                new Vector2(1, 1), new Vector2(1, 1),
+                new Vector2(-RibbonWidth, -RibbonHeight), Vector2.zero, rounded: true);
+            ribbonPanel.raycastTarget = false;
+
+            var ribbonText = UIFactory.AddText(ribbonPanel.transform, "Label", ribbon, UITheme.FontLabel, Color.white,
+                TextAnchor.MiddleCenter, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+                FontStyles.Bold | FontStyles.Italic);
+
+            var card = new StorefrontHeroCard
+            {
+                Panel = panel,
+                Preview = preview,
+                Name = nameText,
+                Headline = headlineText,
+                Ribbon = ribbonText,
+                Action = button,
+                ActionLabel = button.GetComponentInChildren<TextMeshProUGUI>(),
+            };
+            card.BindBonus(badge, bonusText);
+            card.SetBonus(null);
+            return card;
+        }
+
+        /// <summary>
+        /// Bande basse pleine largeur. Elle se pose sur le parent de la rangée, pas dans la rangée :
+        /// c'est la rangée qui lui cède <see cref="BandReserve"/> en bas.
+        /// </summary>
+        public static StorefrontBand BuildBand(Transform root, UITheme theme, string name,
+            string title, string body, string actionText, UnityAction onAction)
+        {
+            var panel = UIFactory.AddPanel(root, name, theme.Panel,
+                new Vector2(0, 0), new Vector2(1, 0),
+                new Vector2(SideMargin, BottomMargin), new Vector2(-SideMargin, BottomMargin + BandHeight),
+                rounded: true);
+            panel.raycastTarget = false;
+
+            // Filet vertical à la couleur de marque : il signe la bande comme une offre du jeu sans
+            // lui donner le fond rouge d'une bannière publicitaire.
+            var rule = UIFactory.AddPanel(panel.transform, "Rule", theme.Accent,
+                new Vector2(0, 0), new Vector2(0, 1),
+                new Vector2(0, 18), new Vector2(6, -18), rounded: true);
+            rule.raycastTarget = false;
+
+            const float ActionWidth = 230f;
+            float textRight = -(ActionWidth + 48f);
+
+            var titleText = UIFactory.AddText(panel.transform, "Title", title, UITheme.FontHeading, theme.Text,
+                TextAnchor.LowerLeft, new Vector2(0, 0.5f), new Vector2(1, 0.5f),
+                new Vector2(30, 2), new Vector2(textRight, 40), FontStyles.Bold | FontStyles.Italic);
+
+            var bodyText = UIFactory.AddText(panel.transform, "Body", body, UITheme.FontLabel, theme.TextMuted,
+                TextAnchor.UpperLeft, new Vector2(0, 0.5f), new Vector2(1, 0.5f),
+                new Vector2(30, -36), new Vector2(textRight, -2));
+
+            var button = UIFactory.AddButton(panel.transform, "Action", actionText, theme.Accent, Color.white,
+                UITheme.FontLabel, new Vector2(1, 0.5f), new Vector2(1, 0.5f),
+                new Vector2(-ActionWidth - 24f, -30f), new Vector2(-24f, 30f),
+                onAction, ButtonKind.Primary);
+
+            return new StorefrontBand
+            {
+                Panel = panel,
+                Rule = rule,
+                Title = titleText,
+                Body = bodyText,
+                Action = button,
+                ActionLabel = button.GetComponentInChildren<TextMeshProUGUI>(),
+            };
         }
 
         /// <summary>

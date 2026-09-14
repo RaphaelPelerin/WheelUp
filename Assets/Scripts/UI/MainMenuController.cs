@@ -35,6 +35,11 @@ namespace WheelingMoto.UI
         const float FallbackLogoWidth = 189f;
         const float FallbackLogoHeight = 84f;
 
+        // Badge de niveau, dans le coin haut droit, à gauche du solde de pièces.
+        const float LevelBadgeWidth = 210f;
+        // Largeur du badge de pièces (200) plus la gouttière qui les sépare.
+        const float LevelBadgeRight = 242f;
+
         const float NavRowHeight = 76f;
         // Sous le cadre du logo (LogoMarginTop + LogoHeight = 164), plus la même respiration qu'avant.
         const float NavStartY = -210f;
@@ -71,18 +76,28 @@ namespace WheelingMoto.UI
         GameObject sidebarObject;
         GameObject contentObject;
         GameObject coinPillObject;
+        GameObject levelBadgeObject;
         GameObject sidebarBleedObject;
         ChestOpeningScreen openingScreen;
 
         SafeArea safeArea;
         Image sidebarBleed;
         RectTransform logoBadge;
+        Image xpFill;
+        Image levelClaimDot;
+        TextMeshProUGUI xpLabel;
+        MotoChoiceScreen motoChoiceScreen;
+        Transform canvasRoot;
 
         void Awake()
         {
             SettingsManager.Apply();
             Build();
             SelectTab(0);
+
+            // Les récompenses de palier ne s'imposent plus à l'arrivée : elles attendent sur la route
+            // des paliers, que le joueur ouvre quand il veut. Le point doré du badge de niveau est ce
+            // qui l'avertit qu'il a quelque chose à y chercher.
         }
 
         // Le badge est le seul affichage du solde : il doit suivre chaque achat et chaque gain de coffre.
@@ -91,6 +106,7 @@ namespace WheelingMoto.UI
             EconomyManager.Changed += RefreshCoins;
             MissionManager.Changed += RefreshBadges;
             AchievementManager.Changed += RefreshBadges;
+            LevelManager.Changed += RefreshLevel;
         }
 
         void OnDisable()
@@ -98,6 +114,7 @@ namespace WheelingMoto.UI
             EconomyManager.Changed -= RefreshCoins;
             MissionManager.Changed -= RefreshBadges;
             AchievementManager.Changed -= RefreshBadges;
+            LevelManager.Changed -= RefreshLevel;
         }
 
         void Build()
@@ -106,6 +123,7 @@ namespace WheelingMoto.UI
 
             var canvas = UIFactory.CreateRootCanvas("MainCanvas");
             var root = canvas.transform;
+            canvasRoot = root;
 
             // Les deux aplats de fond restent hors de la zone sûre : sur iPhone, la couleur doit
             // courir sous la Dynamic Island et jusque dans les coins arrondis, sinon le menu laisse
@@ -131,6 +149,7 @@ namespace WheelingMoto.UI
             BuildLogo(sidebar.transform);
             BuildNavItems(sidebar.transform);
             BuildCoinPill(safeRoot);
+            BuildLevelBadge(safeRoot);
 
             // Marge haute réservée au badge de pièces, marge basse pour ne pas coller au bord.
             var content = UIFactory.AddPanel(safeRoot, "Content", Color.clear,
@@ -148,6 +167,7 @@ namespace WheelingMoto.UI
             // Construit en dernier : l'écran d'ouverture doit recouvrir tout le reste. Il est posé sur
             // le canvas et non dans la zone sûre : son fond opaque doit masquer le menu jusqu'aux bords.
             openingScreen = ChestOpeningScreen.Create(root, theme);
+            motoChoiceScreen = MotoChoiceScreen.Create(root, theme);
             chestsMenu.OpeningRequested = ShowChestOpening;
 
             // Les deux écrans passent par la même séquence : un coffre offert par une mission doit
@@ -156,6 +176,7 @@ namespace WheelingMoto.UI
             playMenu.GarageRequested = () => SelectTabByLabel("CUSTOMISER");
 
             ApplySafeAreaBleed();
+            RefreshLevel();
             RefreshBadges();
         }
 
@@ -202,6 +223,10 @@ namespace WheelingMoto.UI
                 missionsMenu.RefreshOnShow();
                 RefreshCoins();
                 RefreshBadges();
+
+                // Le palier vient d'être encaissé : le point doré du badge doit s'éteindre, ou rester
+                // allumé s'il en reste d'autres derrière.
+                RefreshLevel();
             });
         }
 
@@ -211,6 +236,7 @@ namespace WheelingMoto.UI
             if (sidebarBleedObject != null) sidebarBleedObject.SetActive(visible);
             if (contentObject != null) contentObject.SetActive(visible);
             if (coinPillObject != null) coinPillObject.SetActive(visible);
+            if (levelBadgeObject != null) levelBadgeObject.SetActive(visible);
         }
 
         /// <summary>
@@ -291,6 +317,125 @@ namespace WheelingMoto.UI
             bottom.raycastTarget = false;
             UIFactory.AddText(bottom.transform, "Label", "UP", 26, theme.Accent, TextAnchor.MiddleCenter,
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, FontStyles.Bold | FontStyles.Italic);
+        }
+
+        /// <summary>
+        /// Badge de niveau, posé à gauche du solde de pièces : un disque portant le chiffre, la
+        /// mention « NIVEAU » et une barre d'avancement. Tout le badge est le bouton qui ouvre la
+        /// route des paliers — viser au pouce une barre de douze unités de haut serait un supplice.
+        ///
+        /// Il siégeait dans la barre latérale, entre le logo et les rubriques. Le coin haut droit est
+        /// sa place : c'est déjà là que se lit ce que le joueur possède, et le niveau appartient à
+        /// cette famille-là bien plus qu'à la navigation, dont il occupait une ligne sans jamais y
+        /// mener nulle part.
+        /// </summary>
+        void BuildLevelBadge(Transform root)
+        {
+            var button = UIFactory.AddButton(root, "LevelBadge", string.Empty, theme.PanelAlt, theme.Text,
+                UITheme.FontLabel, new Vector2(1, 1), new Vector2(1, 1),
+                new Vector2(-LevelBadgeRight - LevelBadgeWidth, -100), new Vector2(-LevelBadgeRight, -30),
+                () => LevelPopup.Show(canvasRoot, theme, ClaimLevel));
+            levelBadgeObject = button.gameObject;
+
+            Transform badge = button.transform;
+
+            var disc = UIFactory.AddPanel(badge, "LevelDisc", theme.Accent,
+                new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(11, -26), new Vector2(63, 26),
+                rounded: true);
+            disc.raycastTarget = false;
+
+            xpLabel = UIFactory.AddText(disc.transform, "LevelValue", "", UITheme.FontBody, Color.white,
+                TextAnchor.MiddleCenter, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+                FontStyles.Bold | FontStyles.Italic);
+
+            UIFactory.AddText(badge, "LevelCaption", "NIVEAU", UITheme.FontLabel, theme.TextMuted,
+                TextAnchor.MiddleLeft, new Vector2(0, 1), new Vector2(1, 1),
+                new Vector2(74, -40), new Vector2(-14, -10), FontStyles.Bold | FontStyles.Italic);
+
+            var track = UIFactory.AddPanel(badge, "XpTrack", theme.Background,
+                new Vector2(0, 0), new Vector2(1, 0), new Vector2(74, 18), new Vector2(-16, 30),
+                rounded: true);
+            track.raycastTarget = false;
+
+            xpFill = UIFactory.AddPanel(track.transform, "XpFill", theme.Accent,
+                Vector2.zero, new Vector2(0f, 1f), Vector2.zero, Vector2.zero, rounded: true);
+            xpFill.raycastTarget = false;
+
+            // Point doré mordant sur le disque : depuis que les récompenses ne s'imposent plus à
+            // l'arrivée, c'est la seule chose qui dise au joueur qu'un palier l'attend sur la route.
+            // Sans lui, il pourrait monter cinq niveaux sans jamais penser à ouvrir la page.
+            levelClaimDot = UIFactory.AddPanel(badge, "ClaimDot", theme.Coin,
+                new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(48, 8), new Vector2(72, 32),
+                rounded: true);
+            levelClaimDot.raycastTarget = false;
+        }
+
+        void RefreshLevel()
+        {
+            if (xpLabel != null) xpLabel.text = LevelManager.Level.ToString();
+            if (levelClaimDot != null) levelClaimDot.gameObject.SetActive(LevelManager.HasPendingRewards);
+            if (xpFill != null) xpFill.rectTransform.anchorMax = new Vector2(LevelManager.Ratio, 1f);
+        }
+
+        /// <summary>
+        /// Honore ce que les niveaux doivent, une récompense à la fois : à l'entrée dans le menu, puis
+        /// après chaque écran refermé.
+        ///
+        /// Monter de niveau arrive en conduisant, et on ne coupe pas une partie pour présenter un
+        /// choix de moto : la récompense attend ici. Rien n'est consommé avant que son écran ne soit
+        /// allé au bout, donc fermer l'application au milieu la rend au prochain démarrage.
+        /// </summary>
+        /// <summary>
+        /// Remet la récompense d'un palier, puis l'enregistre comme encaissée. Appelé par la route
+        /// des paliers : elle sait quel palier le joueur réclame, mais pas comment présenter une moto
+        /// ou un coffre — ces deux écrans vivent ici.
+        ///
+        /// Le palier n'est marqué qu'une fois la récompense réellement remise : pour une moto, à la
+        /// fermeture de l'écran de choix, donc après que le joueur a choisi. Fermer l'application
+        /// devant l'écran de choix lui rend son palier intact.
+        /// </summary>
+        void ClaimLevel(int level)
+        {
+            // Vérifié avant de remettre quoi que ce soit : sans ce garde, un appel répété sur un
+            // palier déjà encaissé re-tirerait un coffre à chaque fois, et Claim refuserait juste
+            // d'avancer le compteur.
+            if (level != LevelManager.NextClaimable) return;
+
+            var reward = LevelRewardCatalog.RewardFor(level);
+            if (reward == null) return;
+
+            if (reward.IsMotoChoice)
+            {
+                if (motoChoiceScreen == null)
+                {
+                    Debug.LogWarning($"[MainMenu] Palier {level} : pas d'écran de choix de moto, palier laissé dû.");
+                    return;
+                }
+
+                SetMenuVisible(false);
+                motoChoiceScreen.Play(reward.MotoTier, () =>
+                {
+                    SetMenuVisible(true);
+                    LevelManager.Claim(level);
+                    garageMenu.RefreshOnShow();
+                    RefreshLevel();
+                });
+                return;
+            }
+
+            var chest = ChestCatalog.Find(reward.ChestId);
+            var rewards = chest != null ? ChestManager.Grant(chest) : null;
+
+            // Les lots sont déjà crédités par Grant : l'écran d'ouverture ne fait que les montrer. Le
+            // palier est donc encaissé dès maintenant — y compris si le coffre est inconnu ou vide,
+            // sinon il bloquerait indéfiniment tous ceux qui le suivent, qu'on ne récupère que dans
+            // l'ordre.
+            LevelManager.Claim(level);
+            RefreshLevel();
+
+            if (rewards == null || rewards.Count == 0) return;
+
+            ShowChestOpening(chest, rewards);
         }
 
         void BuildNavItems(Transform sidebar)

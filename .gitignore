@@ -130,3 +130,6 @@ InitTestScene*.unity*
 
 # Bytecode Python des outils de generation.
 __pycache__/
+
+# Maquettes de brainstorming (companion visuel)
+/.superpowers/

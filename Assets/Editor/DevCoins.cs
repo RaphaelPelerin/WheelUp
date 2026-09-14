@@ -48,6 +48,7 @@ namespace WheelingMoto.EditorTools
             MissionManager.ResetAll();
             PlayerStats.ResetAll();
             AchievementManager.ResetAll();
+            LevelManager.ResetAll();
 
             Debug.Log("[WheelUp] Progression effacée, solde remis à 500 pièces.");
         }

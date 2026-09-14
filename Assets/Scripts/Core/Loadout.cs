@@ -56,7 +56,9 @@ namespace WheelingMoto.Core
             var moto = Selected;
             if (moto != null && !string.IsNullOrEmpty(moto.ModelResourcePath)) return moto.ModelResourcePath;
 
-            var fallback = MotoCatalog.Default;
+            // Le repli cherche n'importe quelle moto pourvue d'un modèle, et non la moto de départ :
+            // celle-ci n'en a pas, et exiger qu'elle en ait un reviendrait à n'afficher aucune moto.
+            var fallback = MotoCatalog.FirstWithModel;
             if (moto != null && fallback != null && moto != fallback)
             {
                 Debug.LogWarning($"Pas de modèle 3D pour {moto.Name} : {fallback.Name} est affichée à la place.");

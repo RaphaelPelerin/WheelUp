@@ -16,10 +16,29 @@ namespace WheelingMoto.Data
         public readonly string Price;
         public readonly Color Swatch;
 
+        /// <summary>
+        /// Modèle 3D du lot sous Assets/Resources, sans extension. Chaque lot a le sien : le
+        /// catalogue vend une poignée, une sacoche et un coffre-fort, et montrer la même pile de
+        /// pièces pour les trois effaçait tout l'écart de valeur entre 1,99 € et 17,99 €.
+        /// </summary>
+        public readonly string ModelResourcePath;
+
+        /// <summary>
+        /// Lot mis en avant : il prend la grande carte de la boutique et porte le ruban. Un seul lot
+        /// doit le porter — la vitrine retient le premier et ignore les suivants. C'est ici qu'on
+        /// déplace la mise en avant, pas dans le code d'affichage.
+        /// </summary>
+        public readonly bool Highlight;
+
         public int Total => Coins + Bonus;
 
-        public CoinPack(string id, string name, string description, int coins, int bonus, string price, Color swatch)
+        /// <summary>Part offerte, arrondie au point de pourcentage. Zéro pour un lot sans bonus.</summary>
+        public int BonusPercent => Coins <= 0 ? 0 : Mathf.RoundToInt(Bonus * 100f / Coins);
+
+        public CoinPack(string id, string name, string description, int coins, int bonus, string price, Color swatch,
+            bool highlight = false, string modelResourcePath = null)
         {
+            ModelResourcePath = modelResourcePath;
             Id = id;
             Name = name;
             Description = description;
@@ -27,6 +46,7 @@ namespace WheelingMoto.Data
             Bonus = bonus;
             Price = price;
             Swatch = swatch;
+            Highlight = highlight;
         }
     }
 
@@ -41,15 +61,18 @@ namespace WheelingMoto.Data
         {
             new CoinPack("coins_small", "Poignée de pièces",
                 "De quoi s'offrir une caisse bronze tout de suite.",
-                1000, 0, "1,99 €", new Color(0.85f, 0.68f, 0.32f)),
+                1000, 0, "1,99 €", new Color(0.85f, 0.68f, 0.32f),
+                modelResourcePath: "Shop/coins_small"),
 
             new CoinPack("coins_medium", "Sacoche de pièces",
                 "Le lot d'appoint : une caisse argent et de la marge.",
-                5000, 750, "6,99 €", new Color(0.78f, 0.80f, 0.84f)),
+                5000, 750, "6,99 €", new Color(0.78f, 0.80f, 0.84f),
+                modelResourcePath: "Shop/coins_medium"),
 
             new CoinPack("coins_large", "Coffre-fort",
                 "Le meilleur rapport : plusieurs caisses or d'affilée.",
-                15000, 4000, "17,99 €", new Color(0.95f, 0.80f, 0.30f)),
+                15000, 4000, "17,99 €", new Color(0.95f, 0.80f, 0.30f), highlight: true,
+                modelResourcePath: "Shop/coins_large"),
         };
     }
 }

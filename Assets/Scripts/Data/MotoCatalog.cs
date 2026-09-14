@@ -188,19 +188,41 @@ namespace WheelingMoto.Data
                 PowerHp = 231f, PeakPowerRpm = 11000f, RedlineRpm = 12500f, WeightKg = 238f, TopSpeedKmh = 320f,
                 Gears = 6, FirstGearKmh = 140f, BrakingMps2 = 10.2f, LaunchGrip = 9.5f,
                 BalanceAngle = 48f, BalanceWidth = 8.9f, Handling = 5f,
-            }, true, "Motos/KawasakiNinjaH2"),
+            }, false, "Motos/KawasakiNinjaH2"),
         };
 
-        /// <summary>Moto de départ : la première du catalogue possédée d'office.</summary>
+        /// <summary>
+        /// Moto de départ : la première du catalogue possédée d'office. Elle n'a pas à posséder de
+        /// modèle 3D — c'est <see cref="FirstWithModel"/> qui répond à cette question. Confondre les
+        /// deux revenait à faire dépendre la moto offerte de l'avancement de la production des
+        /// modèles, et à changer de moto de départ le jour où un modèle arrive.
+        /// </summary>
         public static MotoInfo Default
         {
             get
             {
                 foreach (var moto in All)
                 {
-                    if (moto.OwnedByDefault && !string.IsNullOrEmpty(moto.ModelResourcePath)) return moto;
+                    if (moto.OwnedByDefault) return moto;
                 }
                 return All[0];
+            }
+        }
+
+        /// <summary>
+        /// Première moto du catalogue pourvue d'un modèle 3D, possédée ou non. Elle sert de figurant
+        /// à toutes celles qui n'en ont pas encore : la plupart du catalogue aujourd'hui. Sans elle,
+        /// équiper une moto sans modèle laisserait la scène vide.
+        /// </summary>
+        public static MotoInfo FirstWithModel
+        {
+            get
+            {
+                foreach (var moto in All)
+                {
+                    if (!string.IsNullOrEmpty(moto.ModelResourcePath)) return moto;
+                }
+                return null;
             }
         }
 

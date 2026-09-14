@@ -6,6 +6,7 @@ using UnityEngine.InputSystem;
 #endif
 using UnityEngine.UI;
 using WheelingMoto.Core;
+using WheelingMoto.Data;
 using WheelingMoto.Gameplay;
 
 namespace WheelingMoto.UI
@@ -340,6 +341,19 @@ namespace WheelingMoto.UI
         /// </summary>
         void OnQuitToMenu()
         {
+            // Les points de prouesse s'arrêtaient au récapitulatif et disparaissaient avec lui. Ils
+            // deviennent l'XP qui récompense le pilotage, quand les missions récompensent l'assiduité.
+            //
+            // Versés avant la clôture, et non après : une montée de niveau s'annonce via RewardFeed,
+            // que le bilan ne collecte que tant que la session est ouverte. Verser après EndRun ferait
+            // disparaître la ligne « NIVEAU 7 » du récapitulatif qui vient pourtant de la provoquer.
+            var run = MissionTracker.CurrentRun;
+            if (run != null)
+            {
+                run.XpEarned = run.StuntPoints / LevelRewardCatalog.StuntPointsPerXp;
+                LevelManager.AddXp(run.XpEarned);
+            }
+
             var stats = MissionTracker.EndRun();
 
             if (!RunSummaryScreen.TryShow(hudRoot, theme, stats, SceneLoader.LoadMainMenu))
