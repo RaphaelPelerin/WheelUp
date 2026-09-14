@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using WheelingMoto.Gameplay;
 
 namespace WheelingMoto.UI
@@ -8,34 +9,39 @@ namespace WheelingMoto.UI
     /// Jauge verticale discrète affichant l'angle d'équilibre en temps réel : celui du wheeling, ou celui de la
     /// roue avant dès que l'arrière décolle. Trois zones : montée (sous l'équilibre), équilibre (vert) et
     /// critique (rouge, clignotante). Les bornes sont lues sur le contrôleur, donc tout réglage d'angle s'y reflète.
-    ///
-    /// La barre (<see cref="WheelieBar"/>) reprend le trait du cadran du compteur, et ses libellés la typographie des
-    /// autres instruments du HUD : capitales espacées, chiffres en gras, liseré sombre plutôt que fond.
     /// </summary>
     public class WheelieGauge
     {
-        const float BlinkRate = 7f;
-        // Moto à plat, la jauge s'efface à demi ; elle revient en plein, en fondu, dès que la roue se lève.
-        const float IdleAlpha = 0.45f;
-        const float FadeSpeed = 5f;
+        static readonly Color FrameColor = new Color(0f, 0f, 0f, 0.45f);
+        static readonly Color FrameAlertColor = new Color(0.95f, 0.15f, 0.15f, 0.9f);
+        static readonly Color RisingZoneColor = new Color(0.45f, 0.62f, 0.85f, 0.45f);
+        static readonly Color BalanceZoneColor = new Color(0.25f, 0.85f, 0.4f, 0.65f);
+        static readonly Color CriticalZoneColor = new Color(0.95f, 0.2f, 0.2f, 0.65f);
+        static readonly Color BalanceColor = new Color(0.3f, 0.95f, 0.45f, 1f);
+        static readonly Color CriticalColor = new Color(1f, 0.25f, 0.25f, 1f);
 
-        /// <summary>Largeur de la jauge, repère et graduations compris, en unités de canvas.</summary>
-        public const float Width = WheelieBar.DrawnWidth;
+        const float BlinkRate = 7f;
+        const float IdleAlpha = 0.35f;
+
+        /// <summary>Largeur de la barre, en unités de canvas.</summary>
+        public const float Width = 36f;
         /// <summary>Place prise par le titre au-dessus de la barre.</summary>
         public const float SpaceAbove = 42f;
         /// <summary>Place prise par l'angle et le statut sous la barre.</summary>
         public const float SpaceBelow = 82f;
-
-        static readonly string[] AngleStrings = new string[181];
+        // Le repère de l'angle déborde de la barre de chaque côté : la barre est décalée d'autant du bord.
+        const float MarkerOverhang = 8f;
 
         MotorcycleController controller;
         CanvasGroup group;
-        WheelieBar bar;
+        Image frame;
+        GameObject wheelieZones;
+        GameObject stoppieZones;
+        RectTransform marker;
+        Image markerImage;
         TextMeshProUGUI titleText;
         TextMeshProUGUI angleText;
         TextMeshProUGUI statusText;
-        int shownAngle = -1;
-        bool shownStoppie;
 
         /// <summary>
         /// Construit la jauge le long du bord gauche de <paramref name="parent"/> (la zone sûre du HUD). La barre
@@ -50,31 +56,33 @@ namespace WheelingMoto.UI
             controller = target;
 
             var root = UIFactory.CreateUIObject("WheelieGauge", parent);
+            float barLeft = left + MarkerOverhang;
             UIFactory.SetRect(root, new Vector2(0f, 0f), new Vector2(0f, 1f),
-                new Vector2(left, bottom + SpaceBelow), new Vector2(left + Width, -top - SpaceAbove));
+                new Vector2(barLeft, bottom + SpaceBelow), new Vector2(barLeft + Width, -top - SpaceAbove));
             group = root.gameObject.AddComponent<CanvasGroup>();
             group.interactable = false;
             group.blocksRaycasts = false;
-            group.alpha = IdleAlpha;
 
-            var barRect = UIFactory.CreateUIObject("Bar", root);
-            UIFactory.SetRect(barRect, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            bar = barRect.gameObject.AddComponent<WheelieBar>();
-            bar.raycastTarget = false;
+            frame = AddBand(root, "Frame", FrameColor, 0f, 1f, 4f);
+            wheelieZones = AddZones(root, "WheelieZones", controller.wheelieSweetMin, controller.wheelieSweetMax, controller.wheelieFallAngle);
+            stoppieZones = AddZones(root, "StoppieZones", controller.stoppieSweetMin, controller.stoppieSweetMax, controller.stoppieFallAngle);
+            stoppieZones.SetActive(false);
 
-            // Alignés sur le bord gauche de la jauge, donc sur la marge : ils ne débordent jamais de l'écran du côté
-            // de la Dynamic Island, quelle que soit la longueur du texte. Sans fond, détachés par un liseré sombre
-            // comme les points de prouesse et la vitesse.
-            titleText = StuntScoreHud.Outlined(UIFactory.AddText(root, "TitleText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 6f), new Vector2(280f, SpaceAbove), FontStyles.Bold), 0.14f);
-            titleText.characterSpacing = 8f;
-            angleText = StuntScoreHud.Outlined(UIFactory.AddText(root, "AngleText", "0°", UITheme.FontTitle, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, -46f), new Vector2(180f, -4f), FontStyles.Bold), 0.2f);
-            statusText = StuntScoreHud.Outlined(UIFactory.AddText(root, "StatusText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, -SpaceBelow), new Vector2(280f, -48f), FontStyles.Bold), 0.14f);
-            statusText.characterSpacing = 8f;
+            marker = UIFactory.CreateUIObject("Marker", root);
+            markerImage = marker.gameObject.AddComponent<Image>();
+            markerImage.raycastTarget = false;
+            SetMarker(0f);
 
-            ShowMode(false);
+            // Les trois libellés de la jauge sont passés au corps commun : leurs boîtes s'élargissent
+            // d'autant, sans quoi le texte serait rogné au lieu d'être simplement plus gros.
+            // Alignés sur le bord gauche de la jauge, donc sur la marge : ils ne débordent jamais de l'écran
+            // du côté de la Dynamic Island, quelle que soit la longueur du texte.
+            titleText = UIFactory.AddText(root, "TitleText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(-MarkerOverhang, 8), new Vector2(280, SpaceAbove));
+            angleText = UIFactory.AddText(root, "AngleText", "0°", UITheme.FontBody, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(-MarkerOverhang, -44), new Vector2(180, -8));
+            statusText = UIFactory.AddText(root, "StatusText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(-MarkerOverhang, -SpaceBelow), new Vector2(280, -46));
         }
 
         public void Tick()
@@ -83,16 +91,15 @@ namespace WheelingMoto.UI
 
             // La roue avant prend la main dès que l'arrière décolle : le wheeling est alors forcément à plat.
             bool stoppie = controller.StoppieAngle > 0f;
-            if (stoppie != shownStoppie) ShowMode(stoppie);
-
-            // Relues à chaque image : la fiche technique de la moto, qui fixe l'équilibre du wheeling, peut n'être
-            // appliquée qu'après la construction du HUD. La barre ne se redessine que si elles ont changé.
-            if (stoppie) bar.SetZones(controller.stoppieSweetMin, controller.stoppieSweetMax, controller.stoppieFallAngle);
-            else bar.SetZones(controller.wheelieSweetMin, controller.wheelieSweetMax, controller.wheelieFallAngle);
+            if (stoppieZones.activeSelf != stoppie)
+            {
+                stoppieZones.SetActive(stoppie);
+                wheelieZones.SetActive(!stoppie);
+            }
 
             float angle = stoppie ? controller.StoppieAngle : controller.WheelieAngle;
             float fallAngle = stoppie ? controller.stoppieFallAngle : controller.wheelieFallAngle;
-            bar.Value = angle / Mathf.Max(1f, fallAngle);
+            SetMarker(Mathf.Clamp01(angle / Mathf.Max(1f, fallAngle)));
 
             WheelieZone zone = stoppie ? controller.CurrentStoppieZone : controller.CurrentWheelieZone;
             bool blinkOn = Mathf.Repeat(Time.unscaledTime * BlinkRate, 1f) < 0.5f;
@@ -102,11 +109,11 @@ namespace WheelingMoto.UI
             switch (zone)
             {
                 case WheelieZone.Balance:
-                    accent = WheelieBar.BalanceColor;
+                    accent = BalanceColor;
                     status = "ÉQUILIBRE";
                     break;
                 case WheelieZone.Critical:
-                    accent = blinkOn ? WheelieBar.CriticalColor : Color.white;
+                    accent = blinkOn ? CriticalColor : Color.white;
                     // Sur la roue avant, rien ne rattrape la moto au-delà de l'équilibre.
                     status = stoppie ? "CHUTE !" : "FREIN !";
                     break;
@@ -116,27 +123,43 @@ namespace WheelingMoto.UI
                     break;
             }
 
-            bar.Alert = zone == WheelieZone.Critical && blinkOn;
+            markerImage.color = accent;
             angleText.color = accent;
             statusText.color = accent;
             titleText.color = accent;
+            titleText.text = stoppie ? "ROUE AVANT" : "WHEELING";
+            angleText.text = $"{Mathf.RoundToInt(angle)}°";
             statusText.text = status;
-
-            int rounded = Mathf.Clamp(Mathf.RoundToInt(angle), 0, AngleStrings.Length - 1);
-            if (rounded != shownAngle)
-            {
-                shownAngle = rounded;
-                angleText.text = AngleStrings[rounded] ??= rounded + "°";
-            }
-
-            float wanted = zone == WheelieZone.Flat ? IdleAlpha : 1f;
-            group.alpha = Mathf.MoveTowards(group.alpha, wanted, FadeSpeed * Time.unscaledDeltaTime);
+            frame.color = zone == WheelieZone.Critical && blinkOn ? FrameAlertColor : FrameColor;
+            group.alpha = zone == WheelieZone.Flat ? IdleAlpha : 1f;
         }
 
-        void ShowMode(bool stoppie)
+        void SetMarker(float normalized)
         {
-            shownStoppie = stoppie;
-            titleText.text = stoppie ? "ROUE AVANT" : "WHEELING";
+            UIFactory.SetRect(marker, new Vector2(0f, normalized), new Vector2(1f, normalized), new Vector2(-8f, -3f), new Vector2(8f, 3f));
+        }
+
+        /// <summary>Bandes montée / équilibre / critique, à l'échelle de l'angle de chute.</summary>
+        static GameObject AddZones(Transform parent, string name, float sweetMinAngle, float sweetMaxAngle, float fallAngle)
+        {
+            var zones = UIFactory.CreateUIObject(name, parent);
+            UIFactory.SetRect(zones, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+
+            float fall = Mathf.Max(1f, fallAngle);
+            float sweetMin = Mathf.Clamp01(sweetMinAngle / fall);
+            float sweetMax = Mathf.Clamp01(sweetMaxAngle / fall);
+            AddBand(zones, "RisingZone", RisingZoneColor, 0f, sweetMin, 0f);
+            AddBand(zones, "BalanceZone", BalanceZoneColor, sweetMin, sweetMax, 0f);
+            AddBand(zones, "CriticalZone", CriticalZoneColor, sweetMax, 1f, 0f);
+            return zones.gameObject;
+        }
+
+        static Image AddBand(Transform parent, string name, Color color, float yMin, float yMax, float padding)
+        {
+            var band = UIFactory.AddPanel(parent, name, color, new Vector2(0f, yMin), new Vector2(1f, yMax),
+                new Vector2(-padding, -padding), new Vector2(padding, padding));
+            band.raycastTarget = false;
+            return band;
         }
     }
 }
