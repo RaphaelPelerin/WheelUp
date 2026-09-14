@@ -136,10 +136,11 @@ namespace WheelingMoto.Data
             new MissionTemplate("d_night", MissionMetric.NightDistance, MissionScope.Daily,
                 "Parcours {0} de nuit", new[] { 1000f, 2500f, 5000f }, DailyCoins),
 
-            // Vitesse : les cibles collent au plafond du contrôleur (maxSpeed = 15,5 m/s, soit
-            // 56 km/h). Viser plus haut donnerait une mission impossible à boucler.
+            // Vitesse : la moto a la puissance d'une Ninja H2 (316 km/h en pointe), mais la ville est dense.
+            // Il faut une ligne droite de 40 m pour 100 km/h, 100 m pour 150 et 190 m pour 200 : les trois
+            // paliers se bouclent sur une avenue, le dernier en la choisissant bien.
             new MissionTemplate("d_top_speed", MissionMetric.TopSpeed, MissionScope.Daily,
-                "Atteins {0}", new[] { 40f, 48f, 54f }, DailyCoins),
+                "Atteins {0}", new[] { 100f, 150f, 200f }, DailyCoins),
 
             // Méta : aucune instrumentation de conduite, ces lignes se branchent sur le menu.
             new MissionTemplate("d_chest", MissionMetric.ChestOpened, MissionScope.Daily,

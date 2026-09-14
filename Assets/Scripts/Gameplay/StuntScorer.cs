@@ -62,7 +62,7 @@ namespace WheelingMoto.Gameplay
         public float riskFactor = 1.4f;
         [Tooltip("Bonus au pas : un wheeling lent est bien plus dur à tenir.")]
         public float slowFactor = 2f;
-        [Tooltip("Facteur à vitesse maximale : lever à fond rapporte moins qu'au pas, mais reste bien payant.")]
+        [Tooltip("Facteur une fois lancé (vitesse « rapide » des figures du contrôleur) : lever vite rapporte moins qu'au pas, mais reste bien payant.")]
         public float fastFactor = 1.2f;
 
         [Header("Multiplicateur")]
@@ -201,8 +201,9 @@ namespace WheelingMoto.Gameplay
         /// <summary>Bonus de lenteur : tenir la roue au pas vaut bien plus que la lever à fond.</summary>
         float SpeedFactor()
         {
-            float speed = Mathf.Abs(bike.SignedSpeed) / Mathf.Max(0.1f, bike.maxSpeed);
-            return Mathf.Lerp(slowFactor, fastFactor, Mathf.Clamp01(speed));
+            // Rapporté à la vitesse « rapide » des figures, pas à la vitesse de pointe : lever la roue à
+            // 60 km/h reste une figure rapide, même sur une moto qui en fait 300.
+            return Mathf.Lerp(slowFactor, fastFactor, bike.HandlingSpeedFactor);
         }
 
         int MultiplierAt(float held)

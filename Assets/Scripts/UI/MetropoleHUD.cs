@@ -12,11 +12,19 @@ namespace WheelingMoto.UI
 {
     /// <summary>
     /// HUD de la scène Métropole : commandes tactiles (direction par flèches ou par joystick selon les
-    /// Paramètres, GAZ / LEVER / FREIN), vitesse, jauge d'angle (wheeling ou roue avant), bandeau « Chute ! »,
-    /// menu de chute (repartir ou racheter la prouesse), bouton de changement de vue et zone de glissement
-    /// pour tourner la caméra. Pilote à terre, les commandes sont rangées : on ne conduit pas une moto couchée.
-    /// Tout ce qui se touche ou se lit est cadré dans la zone sûre de l'écran (encoche, coins arrondis,
-    /// barre d'accueil), avec une marge : rien n'est rogné sur les téléphones à écran bord à bord.
+    /// Paramètres ; GAZ, LEVER, FREIN AV et FREIN AR), vitesse, jauge d'angle (wheeling ou roue avant), bandeau
+    /// « Chute ! », menu de chute, bouton de changement de vue et zone de glissement pour tourner la caméra.
+    /// Pilote à terre, les commandes sont rangées : on ne conduit pas une moto couchée.
+    ///
+    /// Disposition, pensée pour un iPhone tenu en paysage :
+    /// - en haut à gauche, le cumul des prouesses, puis la jauge d'angle le long du bord gauche ;
+    /// - en haut au centre, la vitesse, le rapport et le régime ; en haut à droite, VUE et PAUSE ;
+    /// - en bas à gauche, la direction ; en bas à droite, les quatre pédales en carré : les deux freins en
+    ///   haut, LEVER et GAZ en bas. LEVER et FREIN AR se touchent, pour doser un wheeling du pouce ; GAZ et
+    ///   FREIN AV aussi, comme la poignée et le levier sous la main droite.
+    /// Tout vit dans la zone sûre de l'écran (<see cref="SafeArea"/>) : la Dynamic Island et l'encoche, qui
+    /// mangent un bord en paysage, la barre d'accueil et l'arc des coins arrondis en sont écartés. Rien
+    /// d'important n'est posé derrière. Les boutons reprennent l'arrondi continu des coins de l'iPhone.
     /// </summary>
     public class MetropoleHUD : MonoBehaviour
     {
@@ -29,19 +37,25 @@ namespace WheelingMoto.UI
         const float SteerButtonSize = 250f;
         const float JoystickSize = 330f;
         const float JoystickKnobSize = 140f;
-        const float PedalWidth = 250f;
-        const float ThrottleHeight = 310f;
-        const float BrakeHeight = 210f;
-        const float LiftHeight = 180f;
+        const float PedalWidth = 230f;
+        const float PedalHeight = 190f;
         const int ControlFontSize = 34;
+        const int PedalFontSize = 30;
+        // Rangée du haut : VUE et PAUSE, assez hauts pour un doigt (35 pt sur iPhone).
+        const float TopButtonWidth = 190f;
+        const float TopButtonHeight = 88f;
+        const int TopFontSize = 20;
+        // Cumul des prouesses en haut à gauche, compteur en direct à droite sous VUE et PAUSE.
+        const float TotalsHeight = 58f;
+        const float LiveScoreHeight = StuntScoreHud.LiveHeight;
+        // Hauteur minimale de la barre de la jauge : en dessous, l'angle ne se lirait plus.
+        const float GaugeMinBar = 120f;
         // Marge au bord de la zone sûre : jamais moins que MinMargin, et sinon cette part du petit côté de
         // l'écran. Sur un téléphone à coins arrondis, 24 unités (2 mm) frôlent l'arrondi et la barre d'accueil.
         const float MinMargin = 24f;
         const float MarginShare = 0.045f;
         // Couloir laissé libre entre les deux piles de boutons : la route doit rester visible entre les pouces.
         const float MinCorridor = 200f;
-        // Bande réservée en haut de l'écran (vitesse, MENU, VUE) au-dessus des commandes.
-        const float TopRowHeight = 120f;
 
         // Boutons translucides : la route reste visible sous les pouces. À l'appui, le fond passe au
         // rouge de la marque, l'assombrissement par défaut du Button ne se verrait pas sur ce fond.
@@ -58,6 +72,7 @@ namespace WheelingMoto.UI
         /// <summary>Racine du canvas : le récapitulatif de fin de session s'y pose, par-dessus tout le HUD.</summary>
         Transform hudRoot;
         TextMeshProUGUI speedText;
+        TextMeshProUGUI gearText;
         TextMeshProUGUI viewLabel;
         CameraView displayedView;
         WheelieGauge gauge;
@@ -116,6 +131,9 @@ namespace WheelingMoto.UI
             if (controller != null)
             {
                 speedText.text = $"{Mathf.RoundToInt(controller.SpeedKmh)} km/h";
+                // Régime arrondi à la centaine : au chiffre près, il clignoterait illisible.
+                int rpm = Mathf.RoundToInt(controller.EngineRpm / 100f) * 100;
+                gearText.text = $"{controller.Gear}e  ·  {StuntScoreHud.Format(rpm)} tr/min";
                 gauge?.Tick();
                 stunts?.Tick();
             }
@@ -156,23 +174,41 @@ namespace WheelingMoto.UI
         }
 
         /// <summary>
-        /// Cale le gabarit des commandes sur l'écran réel. La marge suit la taille de l'écran, pour que rien
-        /// ne colle au bord ni aux coins arrondis ; et si le gabarit complet ne tient pas dans la zone sûre
-        /// (écran étroit, format inhabituel), tout est réduit d'un même facteur. Sans cela, les deux piles de
-        /// boutons finissent par se chevaucher et par déborder de l'écran.
+        /// Cale le gabarit sur l'écran réel. La marge suit la taille de l'écran, pour que rien ne colle au bord
+        /// ni aux coins arrondis ; et si le gabarit complet ne tient pas dans la zone sûre (écran étroit, format
+        /// inhabituel), tout est réduit d'un même facteur. Sans cela, les piles de boutons finissent par se
+        /// chevaucher, recouvrir la jauge et déborder de l'écran.
         /// </summary>
         void MeasureControls()
         {
-            Vector2 safe = UIFactory.SafeAreaSize();
+            Vector2 safe = UsableSafeAreaSize();
             margin = Mathf.Max(MinMargin, Mathf.Min(safe.x, safe.y) * MarginShare);
 
-            // Pile de gauche (flèches ou joystick), pile de droite (FREIN/LEVER puis GAZ), et le couloir central.
-            float left = Mathf.Max(SteerButtonSize * 2f + Gap, JoystickSize);
-            float right = PedalWidth * 2f + Gap;
-            float needWidth = 2f * margin + left + right + MinCorridor;
-            float needHeight = TopRowHeight + margin + BrakeHeight + Gap + LiftHeight;
+            float steerWidth = Mathf.Max(SteerButtonSize * 2f + Gap, JoystickSize);
+            float steerHeight = Mathf.Max(SteerButtonSize, JoystickSize);
+            float pedalsWidth = PedalWidth * 2f + Gap;
+            float pedalsHeight = PedalHeight * 2f + Gap;
+
+            float needWidth = 2f * margin + steerWidth + pedalsWidth + MinCorridor;
+            // Colonne de gauche : cumul, jauge (titre, barre, libellés) puis direction.
+            float leftHeight = TotalsHeight + Gap + WheelieGauge.SpaceAbove + GaugeMinBar + WheelieGauge.SpaceBelow + Gap + steerHeight;
+            // Colonne de droite : VUE et PAUSE, compteur en direct, pédales.
+            float rightHeight = TopButtonHeight + Gap + LiveScoreHeight + Gap + pedalsHeight;
+            float needHeight = 2f * margin + Mathf.Max(leftHeight, rightHeight);
 
             controlScale = Mathf.Clamp(Mathf.Min(safe.x / needWidth, safe.y / needHeight), 0.5f, 1f);
+        }
+
+        /// <summary>
+        /// Zone sûre utilisable, en unités de canvas : celle du système, moins le retrait des coins arrondis que
+        /// <see cref="SafeArea"/> applique sur un écran découpé.
+        /// </summary>
+        static Vector2 UsableSafeAreaSize()
+        {
+            Vector2 safe = UIFactory.SafeAreaSize();
+            bool cutout = Screen.safeArea.width < Screen.width || Screen.safeArea.height < Screen.height;
+            if (cutout) safe -= Vector2.one * (2f * SafeArea.DefaultCornerInset);
+            return safe;
         }
 
         /// <summary>Mesure du gabarit ramenée à l'échelle retenue pour cet écran.</summary>
@@ -191,18 +227,26 @@ namespace WheelingMoto.UI
             BuildCameraDragZone(root);
             BuildFallOverlay(root);
 
-            var safeArea = UIFactory.CreateSafeArea(root);
+            // Zone sûre avec retrait des coins : Dynamic Island, barre d'accueil et arcs des coins écartés.
+            Transform safeArea = UIFactory.AddSafeArea(root, "SafeArea").transform;
 
-            // En haut au centre : le compteur reste dans le champ de vision sans empiéter sur les coins,
-            // occupés par les commandes et les compteurs de prouesses.
+            float topButtonHeight = S(TopButtonHeight);
+
+            // En haut au centre, à la hauteur des boutons : le compteur reste dans le champ de vision.
             speedText = UIFactory.AddText(safeArea, "SpeedText", "0 km/h", 30, theme.Text, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-170, -64), new Vector2(170, -20), FontStyles.Bold);
+                new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-170, -margin - topButtonHeight), new Vector2(170, -margin), FontStyles.Bold);
+            // Rapport et régime juste dessous : on voit la boîte monter les rapports et le moteur prendre ses tours.
+            gearText = UIFactory.AddText(safeArea, "GearText", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-170, -margin - topButtonHeight - 34), new Vector2(170, -margin - topButtonHeight));
 
             // Pause plutôt que retour direct au menu : on peut y régler les Paramètres sans quitter la partie.
-            int topFont = Mathf.RoundToInt(S(16f));
-            UIFactory.AddButton(safeArea, "PauseButton", "II  PAUSE", ControlColor, ControlTextColor, topFont,
-                new Vector2(1, 1), new Vector2(1, 1), new Vector2(-margin - S(160f), -S(60f)), new Vector2(-margin, -S(20f)),
+            Vector2 topRight = new Vector2(1, 1);
+            float buttonWidth = S(TopButtonWidth);
+            var pauseButton = UIFactory.AddButton(safeArea, "PauseButton", "II  PAUSE", ControlColor, ControlTextColor,
+                Mathf.RoundToInt(S(TopFontSize)), topRight, topRight,
+                new Vector2(-margin - buttonWidth, -margin - topButtonHeight), new Vector2(-margin, -margin),
                 () => pauseMenu.Open());
+            UIFactory.ApplyScreenCorners(pauseButton.image);
 
             // Tout ce qui ne sert qu'en roulant (commandes, jauge d'angle, changement de vue) est réuni sous
             // un même objet : la chute le range d'un coup, et les boutons restés enfoncés se relâchent avec lui
@@ -213,21 +257,32 @@ namespace WheelingMoto.UI
 
             if (cameraRig != null)
             {
-                var viewButton = UIFactory.AddButton(driving, "ViewButton", "VUE", ControlColor, ControlTextColor, topFont,
-                    new Vector2(1, 1), new Vector2(1, 1), new Vector2(-margin - S(310f), -S(60f)), new Vector2(-margin - S(170f), -S(20f)),
+                float viewRight = -margin - buttonWidth - S(Gap);
+                var viewButton = UIFactory.AddButton(driving, "ViewButton", "VUE", ControlColor, ControlTextColor,
+                    Mathf.RoundToInt(S(TopFontSize)), topRight, topRight,
+                    new Vector2(viewRight - buttonWidth, -margin - topButtonHeight), new Vector2(viewRight, -margin),
                     () => cameraRig.ToggleView());
+                UIFactory.ApplyScreenCorners(viewButton.image);
                 viewLabel = viewButton.GetComponentInChildren<TextMeshProUGUI>();
                 RefreshViewLabel();
             }
 
+            float steerHeight = S(SettingsManager.Steering == SteeringControl.Joystick ? JoystickSize : SteerButtonSize);
             if (controller != null)
             {
+                // Jauge le long du bord gauche, entre le cumul des prouesses et la direction : sa barre prend
+                // toute la hauteur libre, sur n'importe quel écran.
                 gauge = new WheelieGauge();
-                gauge.Build(driving, theme, controller);
+                gauge.Build(driving, theme, controller,
+                    left: margin,
+                    top: margin + TotalsHeight + S(Gap),
+                    bottom: margin + steerHeight + S(Gap));
 
                 // Le compteur de prouesses reste, lui : c'est là que s'annoncent les points perdus à la chute.
                 stunts = new StuntScoreHud();
-                stunts.Build(safeArea, theme, controller);
+                stunts.Build(safeArea, theme, controller,
+                    edge: margin,
+                    liveTop: margin + topButtonHeight + S(Gap));
             }
 
             // Direction dans son propre conteneur : elle se reconstruit si on change de commande en pause.
@@ -301,12 +356,12 @@ namespace WheelingMoto.UI
         void BuildSteerArrows(Transform parent)
         {
             float size = S(SteerButtonSize);
-            AddHold(parent, "SteerLeft", "◀", Vector2.zero, Vector2.zero,
+            AddHold(parent, "SteerLeft", "◀", ControlFontSize, Vector2.zero,
                 new Vector2(margin, margin), new Vector2(margin + size, margin + size),
                 () => { leftHeld = true; UpdateSteer(); }, () => { leftHeld = false; UpdateSteer(); });
 
             float x = margin + size + S(Gap);
-            AddHold(parent, "SteerRight", "▶", Vector2.zero, Vector2.zero,
+            AddHold(parent, "SteerRight", "▶", ControlFontSize, Vector2.zero,
                 new Vector2(x, margin), new Vector2(x + size, margin + size),
                 () => { rightHeld = true; UpdateSteer(); }, () => { rightHeld = false; UpdateSteer(); });
         }
@@ -340,26 +395,39 @@ namespace WheelingMoto.UI
                 held => knobImage.color = held ? ControlPressedColor : KnobColor);
         }
 
-        /// <summary>GAZ dans le coin, FREIN à sa gauche, LEVER au-dessus de FREIN.</summary>
+        /// <summary>
+        /// Quatre pédales en carré dans le coin bas-droit : FREIN AR et FREIN AV en haut, LEVER et GAZ en bas.
+        /// GAZ, la plus utilisée, occupe le coin, là où le pouce se pose ; le frein avant est juste au-dessus,
+        /// comme le levier au-dessus de la poignée. LEVER et FREIN AR sont l'un sur l'autre : un wheeling se
+        /// tient en basculant le pouce de l'un à l'autre.
+        /// </summary>
         void BuildPedals(Transform parent)
         {
             Vector2 corner = new Vector2(1f, 0f);
-
             float width = S(PedalWidth);
-            float throttleLeft = -margin - width;
-            AddHold(parent, "ThrottleButton", "GAZ", corner, corner,
-                new Vector2(throttleLeft, margin), new Vector2(-margin, margin + S(ThrottleHeight)),
+            float height = S(PedalHeight);
+            float gap = S(Gap);
+
+            float rightColumn = -margin - width;
+            float leftColumn = rightColumn - gap - width;
+            float bottomRow = margin;
+            float topRow = margin + height + gap;
+
+            AddHold(parent, "ThrottleButton", "GAZ", PedalFontSize, corner,
+                new Vector2(rightColumn, bottomRow), new Vector2(rightColumn + width, bottomRow + height),
                 () => controller?.SetThrottle(true), () => controller?.SetThrottle(false));
 
-            float brakeLeft = throttleLeft - S(Gap) - width;
-            AddHold(parent, "BrakeButton", "FREIN", corner, corner,
-                new Vector2(brakeLeft, margin), new Vector2(brakeLeft + width, margin + S(BrakeHeight)),
-                () => controller?.SetBrake(true), () => controller?.SetBrake(false));
-
-            float liftBottom = margin + S(BrakeHeight) + S(Gap);
-            AddHold(parent, "LiftButton", "LEVER", corner, corner,
-                new Vector2(brakeLeft, liftBottom), new Vector2(brakeLeft + width, liftBottom + S(LiftHeight)),
+            AddHold(parent, "LiftButton", "LEVER", PedalFontSize, corner,
+                new Vector2(leftColumn, bottomRow), new Vector2(leftColumn + width, bottomRow + height),
                 () => controller?.SetLift(true), () => controller?.SetLift(false));
+
+            AddHold(parent, "FrontBrakeButton", "FREIN AV", PedalFontSize, corner,
+                new Vector2(rightColumn, topRow), new Vector2(rightColumn + width, topRow + height),
+                () => controller?.SetFrontBrake(true), () => controller?.SetFrontBrake(false));
+
+            AddHold(parent, "RearBrakeButton", "FREIN AR", PedalFontSize, corner,
+                new Vector2(leftColumn, topRow), new Vector2(leftColumn + width, topRow + height),
+                () => controller?.SetRearBrake(true), () => controller?.SetRearBrake(false));
         }
 
         void BuildCameraDragZone(Transform root)
@@ -377,6 +445,7 @@ namespace WheelingMoto.UI
         /// <summary>Bandeau d'échec : ne capte aucun toucher, le joueur peut repartir pendant qu'il s'estompe.</summary>
         void BuildFallOverlay(Transform root)
         {
+            // Le fond traverse l'écran d'un bord à l'autre ; ses textes, centrés, restent loin de la Dynamic Island.
             var band = UIFactory.AddPanel(root, "FallOverlay", new Color(0.55f, 0.04f, 0.04f, 0.6f),
                 new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -75f), new Vector2(0f, 75f));
             band.raycastTarget = false;
@@ -387,10 +456,10 @@ namespace WheelingMoto.UI
             fallOverlay.alpha = 0f;
 
             UIFactory.AddText(band.transform, "FallTitle", "CHUTE !", 56, Color.white, TextAnchor.MiddleCenter,
-                new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -10f), new Vector2(0f, 60f));
+                new Vector2(0.15f, 0.5f), new Vector2(0.85f, 0.5f), new Vector2(0f, -10f), new Vector2(0f, 60f));
             // Le conseil dépend de ce qui a fait tomber le pilote : il est écrit à chaque chute (OnFell).
             fallHint = UIFactory.AddText(band.transform, "FallHint", "", 18, theme.TextMuted, TextAnchor.MiddleCenter,
-                new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -55f), new Vector2(0f, -15f));
+                new Vector2(0.15f, 0.5f), new Vector2(0.85f, 0.5f), new Vector2(0f, -55f), new Vector2(0f, -15f));
         }
 
         void RefreshViewLabel()
@@ -405,12 +474,14 @@ namespace WheelingMoto.UI
             controller?.SetSteer(value);
         }
 
-        void AddHold(Transform parent, string name, string label, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax, UnityAction onPressed, UnityAction onReleased)
+        /// <summary>Bouton à maintenir, ancré sur un coin de la zone sûre, aux coins arrondis de l'iPhone.</summary>
+        void AddHold(Transform parent, string name, string label, int fontSize, Vector2 anchor, Vector2 offsetMin, Vector2 offsetMax, UnityAction onPressed, UnityAction onReleased)
         {
             var btn = UIFactory.AddButton(parent, name, label, ControlColor, ControlTextColor,
-                Mathf.RoundToInt(S(ControlFontSize)), anchorMin, anchorMax, offsetMin, offsetMax, null);
+                Mathf.RoundToInt(S(fontSize)), anchor, anchor, offsetMin, offsetMax, null);
             btn.transition = Selectable.Transition.None;
             var background = btn.GetComponent<Image>();
+            UIFactory.ApplyScreenCorners(background);
 
             var hold = btn.gameObject.AddComponent<HoldButton>();
             hold.OnPressed.AddListener(() => background.color = ControlPressedColor);

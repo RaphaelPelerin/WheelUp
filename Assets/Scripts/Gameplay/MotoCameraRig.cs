@@ -27,6 +27,9 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Racine de la moto (MotoRoot).")]
         public Transform target;
 
+        [Tooltip("Vitesse à laquelle l'effet de vitesse est complet (champ de vision élargi, recentrage vif, vibrations), en m/s. 55 : 200 km/h. Il se construit progressivement jusque-là, sans attendre la vitesse de pointe.")]
+        public float fovFullSpeed = 55f;
+
         [Header("Vue extérieure")]
         public float distance = 6.5f;
         public float lookHeight = 1.2f;
@@ -118,7 +121,7 @@ namespace WheelingMoto.Gameplay
         public bool InCrashView => crashFocus != null;
 
         float SpeedFactor => bike != null
-            ? Mathf.Clamp01(Mathf.Abs(bike.SignedSpeed) / Mathf.Max(0.1f, bike.maxSpeed))
+            ? Mathf.Clamp01(Mathf.Abs(bike.SignedSpeed) / Mathf.Max(0.1f, fovFullSpeed))
             : 0f;
 
         void Awake()

@@ -209,14 +209,14 @@ namespace WheelingMoto.UI
             switch (bike.LastCrash)
             {
                 case CrashCause.Stoppie:
-                    return "Roue avant : relâche FREIN avant la zone rouge, rien ne te rattrape au-delà";
+                    return "Roue avant : relâche FREIN AV avant la zone rouge, rien ne te rattrape au-delà";
                 case CrashCause.Wall:
                     return $"Un obstacle pris à plus de {Mathf.RoundToInt(bike.wallCrashSpeed * 3.6f)} km/h "
                         + "t'envoie par-dessus le guidon";
                 case CrashCause.Landing:
                     return "Réception manquée : de si haut, la suspension ne pardonne pas";
                 default:
-                    return "Dose LEVER et FREIN pour rester dans la zone verte";
+                    return "Dose LEVER et FREIN AR pour rester dans la zone verte";
             }
         }
     }

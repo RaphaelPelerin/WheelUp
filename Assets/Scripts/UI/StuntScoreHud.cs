@@ -44,16 +44,25 @@ namespace WheelingMoto.UI
         float popTimer;
         int shownMultiplier = 1;
 
-        public void Build(Transform parent, UITheme theme, MotorcycleController controller)
+        /// <summary>Hauteur de l'encart en direct, en unités de canvas.</summary>
+        public const float LiveHeight = 146f;
+        const float LiveWidth = 370f;
+        const float TotalWidth = 336f;
+
+        /// <param name="parent">Zone sûre du HUD.</param>
+        /// <param name="edge">Marge aux bords de la zone sûre, en unités de canvas.</param>
+        /// <param name="liveTop">Distance du haut de l'encart en direct au haut de la zone sûre (sous VUE et PAUSE).</param>
+        public void Build(Transform parent, UITheme theme, MotorcycleController controller, float edge, float liveTop)
         {
             scorer = StuntScorer.Attach(controller);
             if (scorer == null) return;
 
-            // Colonne de droite, sous les boutons MENU / VUE et à gauche de la jauge d'angle : tout est aligné
-            // sur le bord droit, hors du champ où le joueur regarde la route. Sans fond : seuls les chiffres
-            // se posent sur la ville, détachés par un liseré sombre.
+            // Colonne de droite, sous les boutons VUE et PAUSE et au-dessus des pédales : tout est aligné sur le
+            // bord droit, hors du champ où le joueur regarde la route. Sans fond : seuls les chiffres se posent
+            // sur la ville, détachés par un liseré sombre.
             var root = UIFactory.CreateUIObject("StuntScore", parent);
-            UIFactory.SetRect(root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-510f, -262f), new Vector2(-140f, -116f));
+            UIFactory.SetRect(root, new Vector2(1f, 1f), new Vector2(1f, 1f),
+                new Vector2(-edge - LiveWidth, -liveTop - LiveHeight), new Vector2(-edge, -liveTop));
             group = root.gameObject.AddComponent<CanvasGroup>();
             group.interactable = false;
             group.blocksRaycasts = false;
@@ -82,9 +91,9 @@ namespace WheelingMoto.UI
 
             // Cumul de la partie dans le coin haut-gauche, libéré par la vitesse passée au centre.
             totalText = Outlined(UIFactory.AddText(parent, "StuntTotal", "", 20, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -58f), new Vector2(360f, -24f), FontStyles.Bold), 0.14f);
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(edge, -edge - 34f), new Vector2(edge + TotalWidth, -edge), FontStyles.Bold), 0.14f);
             recordText = Outlined(UIFactory.AddText(parent, "StuntRecord", "", 15, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -82f), new Vector2(360f, -58f)), 0.12f);
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(edge, -edge - 58f), new Vector2(edge + TotalWidth, -edge - 34f)), 0.12f);
 
             scorer.Banked += OnBanked;
             scorer.Failed += OnFailed;
