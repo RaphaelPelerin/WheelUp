@@ -28,7 +28,7 @@ namespace WheelingMoto.UI
                 26, theme.Text, TextAnchor.UpperLeft,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(30, -170), new Vector2(-30, -30));
 
-            UIFactory.AddButton(canvas.transform, "BackButton", "◀ RETOUR AU MENU", theme.PanelAlt, theme.Text, 18,
+            UIFactory.AddButton(canvas.transform, "BackButton", "« RETOUR AU MENU", theme.PanelAlt, theme.Text, 18,
                 new Vector2(0, 1), new Vector2(0, 1), new Vector2(30, -70), new Vector2(340, -20), SceneLoader.LoadMainMenu);
         }
     }

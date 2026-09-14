@@ -30,6 +30,13 @@ namespace WheelingMoto.UI
         float framedMargin;
         float zoom = 1f;
 
+        // Cadrage « diorama » : mesures du cylindre balayé par le modèle en tournant, plus l'angle
+        // de prise de vue. Nulles tant qu'aucun aperçu n'a demandé ce cadrage — voir FrameDiorama.
+        float framedFootprint;
+        float framedHalfHeight;
+        float framedElevation;
+        bool framedAsDiorama;
+
         static int rigsCreated;
         static GameObject sharedLights;
 
@@ -156,11 +163,46 @@ namespace WheelingMoto.UI
             ApplyCamera();
         }
 
+        /// <summary>
+        /// Cadre une maquette large et plate — un diorama posé sur son socle — qui tourne sur elle-même.
+        ///
+        /// <see cref="Frame"/> encadre la sphère englobante, ce qui convient à un objet à peu près
+        /// cubique mais gaspille la vue sur un diorama : sur la Métropole, la sphère fait 1,41 de rayon
+        /// pour une ville haute de 0,85, et la maquette n'occupait qu'un quart de la hauteur du cadre.
+        ///
+        /// On encadre donc le cylindre réellement balayé par le modèle en tournant — rayon pris sur
+        /// l'empreinte au sol, hauteur sur le modèle — et séparément en largeur et en hauteur, car
+        /// l'aperçu est bien plus large que haut. Le socle étant commun aux trois cartes, elles
+        /// arrivent en prime toutes à la même échelle à l'écran.
+        /// </summary>
+        /// <param name="elevation">Angle de prise de vue au-dessus de l'horizon, en degrés.</param>
+        /// <param name="margin">Marge autour de la maquette. 1 la colle aux bords.</param>
+        protected void FrameDiorama(GameObject model, float elevation = 22f, float margin = 1.06f)
+        {
+            if (!TryGetBounds(model, out var bounds)) return;
+
+            model.transform.position -= bounds.center - stage.position;
+
+            // Rayon du cylindre balayé : la diagonale de l'empreinte, sinon les coins du socle
+            // sortiraient du cadre au quart de tour.
+            var extents = bounds.extents;
+            framedFootprint = Mathf.Max(new Vector2(extents.x, extents.z).magnitude, 0.001f);
+            framedHalfHeight = Mathf.Max(extents.y, 0f);
+            framedElevation = elevation;
+            framedMargin = margin;
+            framedAsDiorama = true;
+
+            // Sert encore au plan de coupe lointain, qui n'a pas à distinguer les deux cadrages.
+            framedRadius = new Vector2(framedFootprint, framedHalfHeight).magnitude;
+            ApplyCamera();
+        }
+
         void PlaceCamera(float radius, float heightFactor, float margin)
         {
             framedRadius = radius;
             framedHeightFactor = heightFactor;
             framedMargin = margin;
+            framedAsDiorama = false;
             ApplyCamera();
         }
 
@@ -168,9 +210,45 @@ namespace WheelingMoto.UI
         {
             if (framedRadius <= 0f) return;
 
+            if (framedAsDiorama)
+            {
+                ApplyDioramaCamera();
+                return;
+            }
+
             float distance = framedRadius / Mathf.Sin(Mathf.Deg2Rad * previewCamera.fieldOfView * 0.5f) * framedMargin / zoom;
 
             previewCamera.transform.localPosition = new Vector3(0f, framedRadius * framedHeightFactor, -distance);
+            previewCamera.transform.LookAt(stage.position);
+            previewCamera.farClipPlane = distance + framedRadius * 4f;
+        }
+
+        /// <summary>
+        /// Recule la caméra jusqu'à ce que le cylindre balayé tienne dans le cadre, en largeur comme
+        /// en hauteur, puis la monte à l'angle demandé.
+        ///
+        /// Le champ de la caméra est vertical : c'est le rapport de la RenderTexture qui donne le champ
+        /// horizontal, et elle n'existe pas encore au premier cadrage. <see cref="EnsureTexture"/>
+        /// rappelle donc cette méthode dès qu'elle est créée ou redimensionnée.
+        /// </summary>
+        void ApplyDioramaCamera()
+        {
+            float tanV = Mathf.Tan(Mathf.Deg2Rad * previewCamera.fieldOfView * 0.5f);
+            float aspect = texture != null && texture.height > 0
+                ? (float)texture.width / texture.height
+                : 1f;
+            float tanH = tanV * aspect;
+
+            // Vu de biais, le cylindre présente sa largeur inchangée mais gagne en hauteur : sa face
+            // supérieure se déplie d'autant que l'angle est élevé.
+            float elevation = Mathf.Deg2Rad * framedElevation;
+            float halfWidth = framedFootprint;
+            float halfHeight = framedHalfHeight * Mathf.Cos(elevation) + framedFootprint * Mathf.Sin(elevation);
+
+            float distance = Mathf.Max(halfWidth / tanH, halfHeight / tanV) * framedMargin / zoom;
+
+            previewCamera.transform.localPosition = new Vector3(
+                0f, distance * Mathf.Sin(elevation), -distance * Mathf.Cos(elevation));
             previewCamera.transform.LookAt(stage.position);
             previewCamera.farClipPlane = distance + framedRadius * 4f;
         }
@@ -222,6 +300,10 @@ namespace WheelingMoto.UI
 
             previewCamera.targetTexture = texture;
             output.texture = texture;
+
+            // Le cadrage diorama se calcule sur le rapport de la texture, qui vient seulement d'être
+            // connu : sans ce rappel, la première image partirait sur un rapport supposé carré.
+            if (framedAsDiorama) ApplyDioramaCamera();
         }
 
         void ReleaseTexture()

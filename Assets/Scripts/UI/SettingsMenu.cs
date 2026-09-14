@@ -14,12 +14,12 @@ namespace WheelingMoto.UI
         /// serrée se lit moins bien qu'une liste espacée.
         /// </summary>
         const string ControlsHelp =
-            "◀ / ▶ ou joystick\ndiriger la moto. Lâché, le joystick revient au milieu.\n\n" +
+            "« / » ou joystick\ndiriger la moto. Lâché, le joystick revient au milieu.\n\n" +
             "GAZ\naccélérer.\n\n" +
             "LEVER\naccélérer et lever la roue avant.\n\n" +
             "FREIN AV\nfreine fort. Gardé serré en roulant vite, il lève l'arrière et met la moto sur la " +
             "roue avant.\n\n" +
-            "FREIN AR\nfreine en douceur, sans couper les gaz. En wheeling, il rabat la roue avant.\n\n" +
+            "FREIN\nle frein principal : il arrête la moto franchement, gaz coupés comme au levier avant. En wheeling, ou LEVER tenu, il ne coupe plus les gaz et sert à rabattre la roue avant.\n\n" +
             "MARCHE ARRIÈRE\nà l'arrêt, reste appuyé sur l'un des deux freins.\n\n" +
             "GLISSER L'ÉCRAN\ntourner la caméra. Le bouton VUE change de point de vue.";
 

@@ -95,7 +95,7 @@ namespace WheelingMoto.UI
                 new Vector2(0f, 0f), new Vector2(0.62f, 0f), new Vector2(36f, 32f), new Vector2(-10f, 118f),
                 OnRespawn);
 
-            UIFactory.AddButton(card, "MenuButton", "◀ MENU", theme.PanelAlt, theme.TextMuted, UITheme.FontBody,
+            UIFactory.AddButton(card, "MenuButton", "« MENU", theme.PanelAlt, theme.TextMuted, UITheme.FontBody,
                 new Vector2(0.62f, 0f), new Vector2(1f, 0f), new Vector2(10f, 32f), new Vector2(-36f, 118f),
                 OnQuitToMenu);
 
@@ -242,7 +242,7 @@ namespace WheelingMoto.UI
                 case CrashCause.Landing:
                     return "Réception manquée : de si haut, la suspension ne pardonne pas";
                 default:
-                    return "Dose LEVER et FREIN AR pour rester dans la zone verte";
+                    return "Dose LEVER et FREIN pour rester dans la zone verte";
             }
         }
     }

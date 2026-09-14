@@ -36,13 +36,14 @@ namespace WheelingMoto.Gameplay
     ///
     /// Commandes : GAZ accélère seulement ; LEVER accélère aussi et lève la roue avant ;
     /// FREIN AV porte l'essentiel du freinage et lève l'arrière s'il reste serré à bonne vitesse ;
-    /// FREIN AR freine plus doucement, sans couper les gaz, et rabat la roue avant en wheeling ;
+    /// FREIN freine et coupe les gaz comme le levier avant, sauf roue avant en l'air ou LEVER tenu, où il
+    /// ne fait que rabattre la roue avant sans couper la poussée ;
     /// l'un ou l'autre fait reculer, maintenu à l'arrêt.
     ///
     /// Trois mécaniques sont simulées à part, sur le pivot visuel :
     /// - le wheeling, autour du point de contact du pneu arrière, en trois zones : sous la zone
     ///   d'équilibre la gravité rabat la roue ; dans la zone elle ne dérive que faiblement, mais les
-    ///   bosses de la route perturbent l'angle en permanence (tenue au dosage LEVER / FREIN AR) ;
+    ///   bosses de la route perturbent l'angle en permanence (tenue au dosage LEVER / FREIN) ;
     ///   au-delà, la moto part en arrière et seul le frein la rattrape ;
     /// - la roue avant (stoppie), autour du contact du pneu avant, sur le même principe : FREIN AV lève
     ///   l'arrière, le relâcher le repose ; au-delà de la zone d'équilibre rien ne rattrape la moto,
@@ -113,12 +114,12 @@ namespace WheelingMoto.Gameplay
         [Header("Freins")]
         [Tooltip("Part du freinage maximal de la moto donnée par le seul frein avant : l'essentiel, la charge passe sur la roue avant.")]
         public float frontBrakeShare = 0.85f;
-        [Tooltip("Part du freinage maximal donnée par le seul frein arrière. Volontairement plus généreuse que le report de charge réel : c'est la commande qui rabat la roue en wheelie, elle doit rester utile seule. Les deux ensemble donnent le freinage maximal.")]
-        public float rearBrakeShare = 0.65f;
+        [Tooltip("Part du freinage maximal donnée par le seul frein arrière. C'est le frein principal du HUD : tenu seul, il doit arrêter la moto aussi fort que la fiche technique le permet, d'où une part pleine. Le plafond de BrakingDeceleration fait que l'ajouter au frein avant ne donne rien de plus : les deux ensemble valent déjà le maximum.")]
+        public float rearBrakeShare = 1f;
 
         [Header("Conduite")]
-        [Tooltip("Frein moteur de base, gaz coupés, en m/s² : renforcé sur les petits rapports et haut dans les tours.")]
-        public float engineBraking = 1.2f;
+        [Tooltip("Frein moteur de base, gaz coupés, en m/s² : renforcé sur les petits rapports et haut dans les tours. Il s'ajoute aux étriers sous le frein comme en roue libre, et c'est le seul apport qui dépasse le freinage maximal de la fiche technique — donc le levier à bouger pour un freinage plus mordant.")]
+        public float engineBraking = 1.8f;
         [Tooltip("Adhérence en plus avec LEVER : embrayage lâché, la roue avant se lève et le pneu arrière tire à fond.")]
         public float liftAccelerationBoost = 1.15f;
         [Tooltip("Vitesse à laquelle la conduite et les figures sont réputées « rapides », en m/s : lissage de l'inclinaison, bosses sous la roue levée, levée de l'arrière au freinage, bonus de lenteur des prouesses, force de l'éjection. Volontairement distincte de la vitesse de pointe : l'équilibre des figures ne bouge pas avec la puissance.")]
@@ -218,7 +219,7 @@ namespace WheelingMoto.Gameplay
         [Header("Wheeling - couples (degrés/s²)")]
         [Tooltip("Levée donnée par LEVER roue au sol et en montée : forte, la roue décolle sèchement.")]
         public float wheelieLiftTorque = 320f;
-        [Tooltip("Levée donnée par LEVER une fois dans la zone d'équilibre : elle reste forte, comme des gaz qui restent ouverts. LEVER tenu en continu fait passer la moto en arrière en une seconde environ : on tient le point d'équilibre par petites touches de LEVER et de FREIN AR.")]
+        [Tooltip("Levée donnée par LEVER une fois dans la zone d'équilibre : elle reste forte, comme des gaz qui restent ouverts. LEVER tenu en continu fait passer la moto en arrière en une seconde environ : on tient le point d'équilibre par petites touches de LEVER et de FREIN.")]
         public float wheelieHoldTorque = 170f;
         [Tooltip("Frein arrière dans la zone de montée et d'équilibre : il rabat la roue aussi vite qu'elle monte.")]
         public float wheelieBrakeTorque = 215f;
@@ -905,9 +906,14 @@ namespace WheelingMoto.Gameplay
             float speed = Mathf.Abs(currentSpeed);
             float resistance = drivetrain.Resistance(speed);
             bool stopped = currentSpeed <= 0.05f;
-            // Les gaz restent ouverts sous le frein arrière : c'est ainsi qu'on tient un wheeling, gaz en grand et
-            // pied sur la pédale. Le frein avant, lui, se serre gaz coupés.
-            bool driving = Accelerate && currentSpeed >= 0f && !FrontBrake;
+            // Le frein arrière coupe les gaz comme celui de l'avant. Sans cela, la poussée d'un gros moteur
+            // dépassait à elle seule le freinage : le joueur tenait le frein et la moto continuait d'accélérer,
+            // ce qui donnait une commande d'apparence inopérante.
+            // Deux exceptions, où le frein ne doit que doser sans couper : roue avant déjà en l'air, et LEVER
+            // tenu. C'est gaz grand ouverts et frein dosé qui tiennent un wheeling, et couper la poussée
+            // reposerait la roue à chaque appui.
+            bool modulatingWheelie = wheelieAngle > 0f || Lift;
+            bool driving = Accelerate && currentSpeed >= 0f && !FrontBrake && !(RearBrake && !modulatingWheelie);
             // Avec LEVER, embrayage lâché : le pneu arrière tire plus fort, la roue avant se lève.
             float thrust = drivetrain.Drive(speed, driving, Lift ? liftAccelerationBoost : 1f, dt);
             float braking = BrakingDeceleration();
@@ -932,7 +938,12 @@ namespace WheelingMoto.Gameplay
             }
             else if (braking > 0f)
             {
-                currentSpeed = Mathf.MoveTowards(currentSpeed, 0f, (braking + resistance) * dt);
+                // Les deux freins coupent les gaz : le frein moteur s'ajoute donc aux étriers, exactement
+                // comme en roue libre juste en dessous. Il manquait ici, alors que la moto décélère déjà
+                // ainsi quand on lâche tout : l'appui mord d'autant plus qu'on est bas dans la boîte et
+                // haut dans les tours, ce qui est justement le cas quand on freine fort.
+                float engine = drivetrain.EngineBraking(engineBraking);
+                currentSpeed = Mathf.MoveTowards(currentSpeed, 0f, (braking + engine + resistance) * dt);
             }
             else
             {

@@ -16,26 +16,28 @@ namespace WheelingMoto.UI
     [DisallowMultipleComponent]
     public class MainMenuController : MonoBehaviour
     {
-        const float SidebarWidth = 460f;
+        const float SidebarWidth = 370f;
 
         /// <summary>
         /// Respiration ajoutée à gauche de la barre, en plus de la zone sûre : en paysage, la Dynamic
         /// Island borde immédiatement le rectangle sûr et les rubriques semblaient collées à la
         /// découpe. Seul le contenu recule ; la bande colorée court toujours jusqu'au bord physique.
         /// </summary>
-        const float SidebarGutter = 64f;
+        const float SidebarGutter = 48f;
 
         // Le logo est un dessin large : son cadre l'est aussi, et NavStartY descend d'autant.
+        // Le rapport 3:2 est celui du dessin : le changer déformerait le logo au lieu de le réduire.
         const float LogoMarginTop = 24f;
-        const float LogoWidth = 300f;
-        const float LogoHeight = 200f;
+        const float LogoWidth = 210f;
+        const float LogoHeight = 140f;
 
         // Badge de secours dessiné par code : plus large que haut, d'où ses propres mesures.
-        const float FallbackLogoWidth = 270f;
-        const float FallbackLogoHeight = 120f;
+        const float FallbackLogoWidth = 189f;
+        const float FallbackLogoHeight = 84f;
 
-        const float NavRowHeight = 98f;
-        const float NavStartY = -270f;
+        const float NavRowHeight = 76f;
+        // Sous le cadre du logo (LogoMarginTop + LogoHeight = 164), plus la même respiration qu'avant.
+        const float NavStartY = -210f;
 
         /// <summary>
         /// Un onglet de la barre latérale. Le panneau et le rafraîchissement sont portés par l'entrée

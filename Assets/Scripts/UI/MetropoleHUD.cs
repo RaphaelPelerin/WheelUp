@@ -12,16 +12,16 @@ namespace WheelingMoto.UI
 {
     /// <summary>
     /// HUD de la scène Métropole : commandes tactiles (direction par flèches ou par joystick selon les
-    /// Paramètres ; GAZ, LEVER, FREIN AV et FREIN AR), vitesse, jauge d'angle (wheeling ou roue avant), bandeau
+    /// Paramètres ; GAZ, LEVER, FREIN AV et FREIN), vitesse, jauge d'angle (wheeling ou roue avant), bandeau
     /// « Chute ! », menu de chute, bouton de changement de vue et zone de glissement pour tourner la caméra.
     /// Pilote à terre, les commandes sont rangées : on ne conduit pas une moto couchée.
     ///
     /// Disposition, pensée pour un iPhone tenu en paysage :
     /// - à gauche, le cumul des prouesses, la jauge d'angle, puis la direction tout en bas ; la jauge est
-    ///   centrée sur le bloc de direction, hors d'atteinte de la Dynamic Island ;
+    ///   plaquée contre le bord, au ras de la marge de la zone sûre ;
     /// - en haut au centre, la vitesse, le rapport et le régime ; en haut à droite, VUE et PAUSE, puis les
     ///   points de la figure en cours juste en dessous ;
-    /// - en bas à droite, les quatre pédales en carré : LEVER et FREIN AV en haut, GAZ et FREIN AR en bas.
+    /// - en bas à droite, les quatre pédales en carré : LEVER et FREIN AV en haut, GAZ et FREIN en bas.
     ///   Les deux commandes qui lèvent la roue, LEVER et GAZ, sont l'une sur l'autre dans la colonne de
     ///   gauche, le pouce passant de l'une à l'autre sans quitter le bloc ; les deux freins occupent la
     ///   colonne de droite, chacun au niveau de la commande qu'il contre.
@@ -277,7 +277,6 @@ namespace WheelingMoto.UI
 
             bool joystick = SettingsManager.Steering == SteeringControl.Joystick;
             float steerHeight = S(joystick ? JoystickSize : SteerButtonSize);
-            float steerWidth = joystick ? S(JoystickSize) : S(SteerButtonSize) * 2f + S(Gap);
             if (controller != null)
             {
                 // Points de la figure en cours dans la colonne de droite, sous VUE et PAUSE, et rentrés du
@@ -287,13 +286,14 @@ namespace WheelingMoto.UI
                     edge: rightEdge,
                     liveTop: margin + topButtonHeight + S(Gap));
 
-                // Jauge dans la colonne de gauche, sous le cumul et juste au-dessus des boutons de direction.
-                // Centrée sur le bloc de direction plutôt que collée au bord : en paysage, la Dynamic Island
-                // mord le bord gauche et passerait par-dessus la barre. Le calcul suit la commande choisie,
-                // le joystick étant bien plus étroit que la paire de flèches.
+                // Jauge contre le bord gauche, sous le cumul et juste au-dessus des boutons de direction :
+                // l'angle se surveille du coin de l'oeil, donc la barre sort du champ où les pouces passent.
+                // Elle était auparavant centrée sur le bloc de direction, ce qui la ramenait vers le milieu
+                // de l'écran. Le bord est sûr : la jauge est posée dans la zone sûre, qui écarte déjà la
+                // Dynamic Island et l'arrondi des coins.
                 gauge = new WheelieGauge();
                 gauge.Build(driving, theme, controller,
-                    left: margin + Mathf.Max(0f, (steerWidth - S(WheelieGauge.Width)) * 0.5f),
+                    left: margin,
                     top: margin + TotalsHeight + S(Gap),
                     bottom: margin + steerHeight + S(Gap));
             }
@@ -369,29 +369,48 @@ namespace WheelingMoto.UI
         void BuildSteerArrows(Transform parent)
         {
             float size = S(SteerButtonSize);
-            AddHold(parent, "SteerLeft", "◀", ControlFontSize, Vector2.zero,
+            AddHold(parent, "SteerLeft", "«", ControlFontSize, Vector2.zero,
                 new Vector2(margin, margin), new Vector2(margin + size, margin + size),
                 () => { leftHeld = true; UpdateSteer(); }, () => { leftHeld = false; UpdateSteer(); });
 
             float x = margin + size + S(Gap);
-            AddHold(parent, "SteerRight", "▶", ControlFontSize, Vector2.zero,
+            AddHold(parent, "SteerRight", "»", ControlFontSize, Vector2.zero,
                 new Vector2(x, margin), new Vector2(x + size, margin + size),
                 () => { rightHeld = true; UpdateSteer(); }, () => { rightHeld = false; UpdateSteer(); });
         }
 
-        /// <summary>Joystick horizontal : la direction suit l'écart du doigt et revient au milieu au relâchement.</summary>
+        /// <summary>
+        /// Joystick horizontal : la direction suit l'écart du doigt et revient au milieu au relâchement.
+        ///
+        /// La zone de préhension court sur toute la moitié gauche de l'écran, et non plus sur un disque à la
+        /// taille du pouce. C'est la course du doigt qui donne la finesse du braquage : un disque de
+        /// JoystickSize ne laissait qu'une centaine d'unités de part et d'autre du centre, donc un tout petit
+        /// déplacement suffisait à passer de tout droit à braquage maximal. Ancrée en fraction de l'écran
+        /// plutôt qu'en unités fixes, la zone occupe la même moitié sur tous les formats.
+        ///
+        /// La piste visible, elle, reste à la hauteur de la manette : une dalle de la hauteur de la zone
+        /// masquerait le quart de la route. Le joueur attrape donc bien plus large que ce qu'il voit.
+        /// </summary>
         void BuildJoystick(Transform parent)
         {
             var area = UIFactory.CreateUIObject("SteerJoystick", parent);
-            UIFactory.SetRect(area, Vector2.zero, Vector2.zero,
-                new Vector2(margin, margin), new Vector2(margin + S(JoystickSize), margin + S(JoystickSize)));
-            var background = area.gameObject.AddComponent<Image>();
-            background.sprite = SteerJoystick.CircleSprite;
-            background.color = ControlColor;
-            background.raycastTarget = true;
+            UIFactory.SetRect(area, new Vector2(0f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(margin, margin), new Vector2(-S(Gap), margin + S(JoystickSize)));
+
+            // Transparente mais captante : c'est ce rectangle que SteerJoystick mesure pour la course.
+            var surface = area.gameObject.AddComponent<Image>();
+            surface.color = Color.clear;
+            surface.raycastTarget = true;
+
+            // Piste visible, centrée en hauteur sur la manette : la zone reste plus haute qu'elle, pour que
+            // le pouce puisse dériver vers le haut ou le bas sans lâcher la direction.
+            float trackHalf = S(JoystickKnobSize) * 0.5f;
+            var track = UIFactory.AddPanel(area, "Track", ControlColor, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f),
+                new Vector2(0f, -trackHalf), new Vector2(0f, trackHalf), rounded: true);
+            track.raycastTarget = false;
 
             // Rail horizontal : le joystick ne sert qu'à diriger.
-            var rail = UIFactory.AddPanel(area, "Rail", JoystickRailColor, new Vector2(0.12f, 0.5f), new Vector2(0.88f, 0.5f),
+            var rail = UIFactory.AddPanel(area, "Rail", JoystickRailColor, new Vector2(0.02f, 0.5f), new Vector2(0.98f, 0.5f),
                 new Vector2(0f, -6f), new Vector2(0f, 6f), rounded: true);
             rail.raycastTarget = false;
 
@@ -409,9 +428,9 @@ namespace WheelingMoto.UI
         }
 
         /// <summary>
-        /// Quatre pédales en carré dans le coin bas-droit : FREIN AR et FREIN AV en haut, LEVER et GAZ en bas.
+        /// Quatre pédales en carré dans le coin bas-droit : FREIN et FREIN AV en haut, LEVER et GAZ en bas.
         /// GAZ, la plus utilisée, occupe le coin, là où le pouce se pose ; le frein avant est juste au-dessus,
-        /// comme le levier au-dessus de la poignée. LEVER et FREIN AR sont l'un sur l'autre : un wheeling se
+        /// comme le levier au-dessus de la poignée. LEVER et FREIN sont l'un sur l'autre : un wheeling se
         /// tient en basculant le pouce de l'un à l'autre.
         /// </summary>
         void BuildPedals(Transform parent)
@@ -438,7 +457,7 @@ namespace WheelingMoto.UI
                 new Vector2(rightColumn, topRow), new Vector2(rightColumn + width, topRow + height),
                 () => controller?.SetFrontBrake(true), () => controller?.SetFrontBrake(false));
 
-            AddHold(parent, "RearBrakeButton", "FREIN AR", PedalFontSize, corner,
+            AddHold(parent, "RearBrakeButton", "FREIN", PedalFontSize, corner,
                 new Vector2(rightColumn, bottomRow), new Vector2(rightColumn + width, bottomRow + height),
                 () => controller?.SetRearBrake(true), () => controller?.SetRearBrake(false));
         }

@@ -14,8 +14,8 @@ namespace WheelingMoto.UI
         const int NoPointer = int.MinValue;
         const int CircleTextureSize = 128;
 
-        [Tooltip("Zone morte au centre, en fraction de la course.")]
-        public float deadZone = 0.12f;
+        [Tooltip("Zone morte au centre, en fraction de la course. Faible à dessein : la zone de préhension couvre la moitié de l'écran, donc une même fraction représente un déplacement du doigt bien plus long qu'au temps du disque au pouce, et une valeur élevée se sentirait comme un temps mort avant que la moto ne tourne.")]
+        public float deadZone = 0.05f;
         [Tooltip("Vitesse de retour de la manette au centre une fois relâchée.")]
         public float returnSpeed = 14f;
 

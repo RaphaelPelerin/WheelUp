@@ -59,7 +59,7 @@ namespace WheelingMoto.UI
             UIFactory.AddButton(cardRect, "SettingsButton", "PARAMÈTRES", theme.PanelAlt, theme.Text, UITheme.FontBody,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(48f, -320f), new Vector2(-48f, -242f),
                 ShowSettings);
-            UIFactory.AddButton(cardRect, "QuitButton", "◀ MENU PRINCIPAL", theme.PanelAlt, theme.TextMuted, UITheme.FontLabel,
+            UIFactory.AddButton(cardRect, "QuitButton", "« MENU PRINCIPAL", theme.PanelAlt, theme.TextMuted, UITheme.FontLabel,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(48f, -418f), new Vector2(-48f, -340f),
                 QuitToMainMenu);
 
@@ -75,7 +75,7 @@ namespace WheelingMoto.UI
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             settingsView = view.gameObject;
 
-            UIFactory.AddButton(view.transform, "BackButton", "◀ RETOUR", theme.PanelAlt, theme.Text, UITheme.FontLabel,
+            UIFactory.AddButton(view.transform, "BackButton", "« RETOUR", theme.PanelAlt, theme.Text, UITheme.FontLabel,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -76f), new Vector2(244f, -20f),
                 ShowCard);
 

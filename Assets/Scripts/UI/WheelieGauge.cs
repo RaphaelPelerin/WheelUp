@@ -115,7 +115,7 @@ namespace WheelingMoto.UI
                 case WheelieZone.Critical:
                     accent = blinkOn ? CriticalColor : Color.white;
                     // Sur la roue avant, rien ne rattrape la moto au-delà de l'équilibre.
-                    status = stoppie ? "CHUTE !" : "FREIN AR !";
+                    status = stoppie ? "CHUTE !" : "FREIN !";
                     break;
                 default:
                     accent = Color.white;

@@ -46,8 +46,10 @@ namespace WheelingMoto.UI
                 return false;
             }
 
-            // Cadrage plus large que pour une moto : une ville se lit de loin, pas de près.
-            Frame(model, heightFactor: 0.30f, margin: 1.2f);
+            // Cadrage diorama : la maquette est large et plate, l'encadrer comme une sphère la
+            // réduisait au quart de la hauteur disponible. Marge serrée — c'est la maquette qu'on
+            // vient voir, et le halo derrière elle suffit à la décoller du bord.
+            FrameDiorama(model, elevation: 22f, margin: 1.04f);
             output.enabled = true;
             return true;
         }
