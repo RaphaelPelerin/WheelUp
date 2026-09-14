@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -41,13 +42,19 @@ namespace WheelingMoto.UI
         float openTimer;
         bool open;
         bool watchingAd;
+        Action quit;
 
         /// <summary>Vrai dès la chute, temps de latence compris : le HUD range ses commandes.</summary>
         public bool Showing => open || openTimer > 0f;
 
-        public void Build(Transform root, UITheme uiTheme, MotorcycleController target)
+        /// <param name="onQuit">
+        /// Retour au menu principal. Laissé nul, on y va directement ; le HUD s'en sert pour clore la
+        /// session de mesure et montrer le bilan de run, comme depuis la pause.
+        /// </param>
+        public void Build(Transform root, UITheme uiTheme, MotorcycleController target, Action onQuit = null)
         {
             controller = target;
+            quit = onQuit;
             theme = uiTheme;
             if (controller == null) return;
             scorer = StuntScorer.Attach(controller);
@@ -68,25 +75,44 @@ namespace WheelingMoto.UI
                 new Vector2(-CardWidth * 0.5f, -FullHeight * 0.5f), new Vector2(CardWidth * 0.5f, FullHeight * 0.5f),
                 rounded: true).transform;
 
-            titleText = UIFactory.AddText(card, "Title", "CHUTE", 54, TitleColor, TextAnchor.MiddleCenter,
+            titleText = UIFactory.AddText(card, "Title", "CHUTE", UITheme.FontDisplay, TitleColor, TextAnchor.MiddleCenter,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(32f, -104f), new Vector2(-32f, -32f), FontStyles.Bold);
-            hintText = UIFactory.AddText(card, "Hint", "", 19, theme.TextMuted, TextAnchor.UpperCenter,
+            hintText = UIFactory.AddText(card, "Hint", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.UpperCenter,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(32f, -166f), new Vector2(-32f, -106f));
-            riskText = UIFactory.AddText(card, "Risk", "", 24, RiskColor, TextAnchor.MiddleCenter,
+            riskText = UIFactory.AddText(card, "Risk", "", UITheme.FontBody, RiskColor, TextAnchor.MiddleCenter,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(32f, -216f), new Vector2(-32f, -172f), FontStyles.Bold);
 
             // Libellé posé ici pour que le texte existe ; il est réécrit à chaque ouverture avec les points en jeu.
-            adButton = UIFactory.AddButton(card, "WatchAdButton", "REGARDER UNE PUB", theme.Accent, theme.Text, 28,
+            adButton = UIFactory.AddButton(card, "WatchAdButton", "REGARDER UNE PUB", theme.Accent, theme.Text, UITheme.FontHeading,
                 new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(36f, 134f), new Vector2(-36f, 250f),
                 OnWatchAd, ButtonKind.Primary);
             adLabel = adButton.GetComponentInChildren<TextMeshProUGUI>();
 
-            respawnButton = UIFactory.AddButton(card, "RespawnButton", "REPARTIR", theme.PanelAlt, theme.Text, 26,
-                new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(36f, 32f), new Vector2(-36f, 118f),
+            // Rangée du bas partagée : repartir reste l'action large, le retour au menu prend le reste.
+            // Partager la rangée plutôt qu'en ajouter une évite d'agrandir la carte, qui tient déjà
+            // l'écran en paysage.
+            respawnButton = UIFactory.AddButton(card, "RespawnButton", "REPARTIR", theme.PanelAlt, theme.Text, UITheme.FontBody,
+                new Vector2(0f, 0f), new Vector2(0.62f, 0f), new Vector2(36f, 32f), new Vector2(-10f, 118f),
                 OnRespawn);
+
+            UIFactory.AddButton(card, "MenuButton", "◀ MENU", theme.PanelAlt, theme.TextMuted, UITheme.FontBody,
+                new Vector2(0.62f, 0f), new Vector2(1f, 0f), new Vector2(10f, 32f), new Vector2(-36f, 118f),
+                OnQuitToMenu);
 
             controller.Fell += OnFell;
             controller.Respawned += OnRespawned;
+        }
+
+        /// <summary>Quitte la partie depuis la chute, par le meme chemin que la pause.</summary>
+        void OnQuitToMenu()
+        {
+            if (quit != null)
+            {
+                quit();
+                return;
+            }
+
+            SceneLoader.LoadMainMenu();
         }
 
         public void Dispose()

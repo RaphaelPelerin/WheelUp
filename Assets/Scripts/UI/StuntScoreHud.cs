@@ -7,7 +7,7 @@ using WheelingMoto.Gameplay;
 namespace WheelingMoto.UI
 {
     /// <summary>
-    /// Compteur de prouesses, façon Forza : pendant la figure, un encart discret sur la droite montre les points
+    /// Compteur de prouesses, façon Forza : pendant la figure, un encart sur la droite montre les points
     /// qui montent, le multiplicateur en cours et ce qui les fait monter (équilibre, prise de risque, lenteur).
     /// À la repose des deux roues, le total encaissé s'affiche en vert ; après une chute, en rouge, perdu.
     /// Le cumul de la partie et le record restent affichés dans le coin haut-gauche.
@@ -45,8 +45,8 @@ namespace WheelingMoto.UI
         int shownMultiplier = 1;
 
         /// <summary>Hauteur de l'encart en direct, en unités de canvas.</summary>
-        public const float LiveHeight = 146f;
-        const float LiveWidth = 370f;
+        public const float LiveHeight = 182f;
+        const float LiveWidth = 430f;
         const float TotalWidth = 336f;
 
         /// <param name="parent">Zone sûre du HUD.</param>
@@ -57,9 +57,9 @@ namespace WheelingMoto.UI
             scorer = StuntScorer.Attach(controller);
             if (scorer == null) return;
 
-            // Colonne de droite, sous les boutons VUE et PAUSE et au-dessus des pédales : tout est aligné sur le
-            // bord droit, hors du champ où le joueur regarde la route. Sans fond : seuls les chiffres se posent
-            // sur la ville, détachés par un liseré sombre.
+            // Colonne de droite, sous VUE et PAUSE : hors du champ où le joueur regarde la route, et rentré
+            // du bord comme le reste de cette colonne. Sans fond : seuls les chiffres se posent sur la ville,
+            // détachés par un liseré sombre.
             var root = UIFactory.CreateUIObject("StuntScore", parent);
             UIFactory.SetRect(root, new Vector2(1f, 1f), new Vector2(1f, 1f),
                 new Vector2(-edge - LiveWidth, -liveTop - LiveHeight), new Vector2(-edge, -liveTop));
@@ -68,14 +68,16 @@ namespace WheelingMoto.UI
             group.blocksRaycasts = false;
             group.alpha = 0f;
 
-            titleText = Outlined(UIFactory.AddText(root, "Title", "", 18, LiveColor, TextAnchor.MiddleRight,
-                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -32f), new Vector2(-12f, -8f), FontStyles.Bold), 0.14f);
-            pointsText = Outlined(UIFactory.AddText(root, "Points", "0", 56, LiveColor, TextAnchor.MiddleRight,
-                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -108f), new Vector2(-96f, -34f), FontStyles.Bold), 0.18f);
-            multiplierText = Outlined(UIFactory.AddText(root, "Multiplier", "x1", 30, LiveColor, TextAnchor.MiddleRight,
-                new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-86f, -100f), new Vector2(-12f, -42f), FontStyles.Bold), 0.16f);
-            bonusText = Outlined(UIFactory.AddText(root, "Bonus", "", 15, theme.TextMuted, TextAnchor.MiddleRight,
-                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -132f), new Vector2(-12f, -110f)), 0.12f);
+            // Corps nettement plus gros qu'avant : ces points sont la récompense du wheeling, ils doivent se
+            // lire d'un coup d'oeil sans quitter la route des yeux.
+            titleText = Outlined(UIFactory.AddText(root, "Title", "", UITheme.FontLabel, LiveColor, TextAnchor.MiddleRight,
+                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -38f), new Vector2(-12f, -8f), FontStyles.Bold), 0.14f);
+            pointsText = Outlined(UIFactory.AddText(root, "Points", "0", UITheme.FontReadout, LiveColor, TextAnchor.MiddleRight,
+                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -136f), new Vector2(-110f, -40f), FontStyles.Bold), 0.22f);
+            multiplierText = Outlined(UIFactory.AddText(root, "Multiplier", "x1", UITheme.FontTitle, LiveColor, TextAnchor.MiddleRight,
+                new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-104f, -126f), new Vector2(-12f, -50f), FontStyles.Bold), 0.18f);
+            bonusText = Outlined(UIFactory.AddText(root, "Bonus", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleRight,
+                new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -166f), new Vector2(-12f, -140f)), 0.12f);
 
             // Barre de progression vers le cran de multiplicateur suivant.
             var track = UIFactory.AddPanel(root, "ChainTrack", ChainTrackColor,
@@ -90,10 +92,10 @@ namespace WheelingMoto.UI
             chainFill.fillAmount = 0f;
 
             // Cumul de la partie dans le coin haut-gauche, libéré par la vitesse passée au centre.
-            totalText = Outlined(UIFactory.AddText(parent, "StuntTotal", "", 20, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(edge, -edge - 34f), new Vector2(edge + TotalWidth, -edge), FontStyles.Bold), 0.14f);
-            recordText = Outlined(UIFactory.AddText(parent, "StuntRecord", "", 15, theme.TextMuted, TextAnchor.MiddleLeft,
-                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(edge, -edge - 58f), new Vector2(edge + TotalWidth, -edge - 34f)), 0.12f);
+            totalText = Outlined(UIFactory.AddText(parent, "StuntTotal", "", UITheme.FontBody, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(edge, -edge - 38f), new Vector2(edge + TotalWidth, -edge), FontStyles.Bold), 0.14f);
+            recordText = Outlined(UIFactory.AddText(parent, "StuntRecord", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(edge, -edge - 68f), new Vector2(edge + TotalWidth, -edge - 38f)), 0.12f);
 
             scorer.Banked += OnBanked;
             scorer.Failed += OnFailed;

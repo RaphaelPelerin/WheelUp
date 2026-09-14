@@ -17,11 +17,14 @@ namespace WheelingMoto.UI
     /// Pilote à terre, les commandes sont rangées : on ne conduit pas une moto couchée.
     ///
     /// Disposition, pensée pour un iPhone tenu en paysage :
-    /// - en haut à gauche, le cumul des prouesses, puis la jauge d'angle le long du bord gauche ;
-    /// - en haut au centre, la vitesse, le rapport et le régime ; en haut à droite, VUE et PAUSE ;
-    /// - en bas à gauche, la direction ; en bas à droite, les quatre pédales en carré : les deux freins en
-    ///   haut, LEVER et GAZ en bas. LEVER et FREIN AR se touchent, pour doser un wheeling du pouce ; GAZ et
-    ///   FREIN AV aussi, comme la poignée et le levier sous la main droite.
+    /// - à gauche, le cumul des prouesses, la jauge d'angle, puis la direction tout en bas ; la jauge est
+    ///   centrée sur le bloc de direction, hors d'atteinte de la Dynamic Island ;
+    /// - en haut au centre, la vitesse, le rapport et le régime ; en haut à droite, VUE et PAUSE, puis les
+    ///   points de la figure en cours juste en dessous ;
+    /// - en bas à droite, les quatre pédales en carré : LEVER et FREIN AV en haut, GAZ et FREIN AR en bas.
+    ///   Les deux commandes qui lèvent la roue, LEVER et GAZ, sont l'une sur l'autre dans la colonne de
+    ///   gauche, le pouce passant de l'une à l'autre sans quitter le bloc ; les deux freins occupent la
+    ///   colonne de droite, chacun au niveau de la commande qu'il contre.
     /// Tout vit dans la zone sûre de l'écran (<see cref="SafeArea"/>) : la Dynamic Island et l'encoche, qui
     /// mangent un bord en paysage, la barre d'accueil et l'arc des coins arrondis en sont écartés. Rien
     /// d'important n'est posé derrière. Les boutons reprennent l'arrondi continu des coins de l'iPhone.
@@ -39,13 +42,13 @@ namespace WheelingMoto.UI
         const float JoystickKnobSize = 140f;
         const float PedalWidth = 230f;
         const float PedalHeight = 190f;
-        const int ControlFontSize = 34;
-        const int PedalFontSize = 30;
+        const int ControlFontSize = UITheme.FontTitle;
+        const int PedalFontSize = UITheme.FontHeading;
         // Rangée du haut : VUE et PAUSE, assez hauts pour un doigt (35 pt sur iPhone).
         const float TopButtonWidth = 190f;
         const float TopButtonHeight = 88f;
-        const int TopFontSize = 20;
-        // Cumul des prouesses en haut à gauche, compteur en direct à droite sous VUE et PAUSE.
+        const int TopFontSize = UITheme.FontLabel;
+        // Cumul des prouesses en haut à gauche ; le compteur en direct est à droite, sous VUE et PAUSE.
         const float TotalsHeight = 58f;
         const float LiveScoreHeight = StuntScoreHud.LiveHeight;
         // Hauteur minimale de la barre de la jauge : en dessous, l'angle ne se lirait plus.
@@ -191,8 +194,9 @@ namespace WheelingMoto.UI
 
             float needWidth = 2f * margin + steerWidth + pedalsWidth + MinCorridor;
             // Colonne de gauche : cumul, jauge (titre, barre, libellés) puis direction.
-            float leftHeight = TotalsHeight + Gap + WheelieGauge.SpaceAbove + GaugeMinBar + WheelieGauge.SpaceBelow + Gap + steerHeight;
-            // Colonne de droite : VUE et PAUSE, compteur en direct, pédales.
+            float leftHeight = TotalsHeight + Gap
+                + WheelieGauge.SpaceAbove + GaugeMinBar + WheelieGauge.SpaceBelow + Gap + steerHeight;
+            // Colonne de droite : VUE et PAUSE, les points en direct, puis les pédales.
             float rightHeight = TopButtonHeight + Gap + LiveScoreHeight + Gap + pedalsHeight;
             float needHeight = 2f * margin + Mathf.Max(leftHeight, rightHeight);
 
@@ -233,18 +237,22 @@ namespace WheelingMoto.UI
             float topButtonHeight = S(TopButtonHeight);
 
             // En haut au centre, à la hauteur des boutons : le compteur reste dans le champ de vision.
-            speedText = UIFactory.AddText(safeArea, "SpeedText", "0 km/h", 30, theme.Text, TextAnchor.MiddleCenter,
+            speedText = UIFactory.AddText(safeArea, "SpeedText", "0 km/h", UITheme.FontTitle, theme.Text, TextAnchor.MiddleCenter,
                 new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-170, -margin - topButtonHeight), new Vector2(170, -margin), FontStyles.Bold);
             // Rapport et régime juste dessous : on voit la boîte monter les rapports et le moteur prendre ses tours.
             gearText = UIFactory.AddText(safeArea, "GearText", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleCenter,
                 new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-170, -margin - topButtonHeight - 34), new Vector2(170, -margin - topButtonHeight));
+
+            // La rangée du haut est rentrée d'un cran depuis le bord : elle tombait trop près de l'angle de
+            // l'écran, là où la main qui tient le téléphone mord déjà.
+            float rightEdge = margin + S(Gap);
 
             // Pause plutôt que retour direct au menu : on peut y régler les Paramètres sans quitter la partie.
             Vector2 topRight = new Vector2(1, 1);
             float buttonWidth = S(TopButtonWidth);
             var pauseButton = UIFactory.AddButton(safeArea, "PauseButton", "II  PAUSE", ControlColor, ControlTextColor,
                 Mathf.RoundToInt(S(TopFontSize)), topRight, topRight,
-                new Vector2(-margin - buttonWidth, -margin - topButtonHeight), new Vector2(-margin, -margin),
+                new Vector2(-rightEdge - buttonWidth, -margin - topButtonHeight), new Vector2(-rightEdge, -margin),
                 () => pauseMenu.Open());
             UIFactory.ApplyScreenCorners(pauseButton.image);
 
@@ -257,7 +265,7 @@ namespace WheelingMoto.UI
 
             if (cameraRig != null)
             {
-                float viewRight = -margin - buttonWidth - S(Gap);
+                float viewRight = -rightEdge - buttonWidth - S(Gap);
                 var viewButton = UIFactory.AddButton(driving, "ViewButton", "VUE", ControlColor, ControlTextColor,
                     Mathf.RoundToInt(S(TopFontSize)), topRight, topRight,
                     new Vector2(viewRight - buttonWidth, -margin - topButtonHeight), new Vector2(viewRight, -margin),
@@ -267,22 +275,27 @@ namespace WheelingMoto.UI
                 RefreshViewLabel();
             }
 
-            float steerHeight = S(SettingsManager.Steering == SteeringControl.Joystick ? JoystickSize : SteerButtonSize);
+            bool joystick = SettingsManager.Steering == SteeringControl.Joystick;
+            float steerHeight = S(joystick ? JoystickSize : SteerButtonSize);
+            float steerWidth = joystick ? S(JoystickSize) : S(SteerButtonSize) * 2f + S(Gap);
             if (controller != null)
             {
-                // Jauge le long du bord gauche, entre le cumul des prouesses et la direction : sa barre prend
-                // toute la hauteur libre, sur n'importe quel écran.
-                gauge = new WheelieGauge();
-                gauge.Build(driving, theme, controller,
-                    left: margin,
-                    top: margin + TotalsHeight + S(Gap),
-                    bottom: margin + steerHeight + S(Gap));
-
-                // Le compteur de prouesses reste, lui : c'est là que s'annoncent les points perdus à la chute.
+                // Points de la figure en cours dans la colonne de droite, sous VUE et PAUSE, et rentrés du
+                // bord du même cran que ces boutons : c'est l'autre main, celle qui ne surveille pas l'angle.
                 stunts = new StuntScoreHud();
                 stunts.Build(safeArea, theme, controller,
-                    edge: margin,
+                    edge: rightEdge,
                     liveTop: margin + topButtonHeight + S(Gap));
+
+                // Jauge dans la colonne de gauche, sous le cumul et juste au-dessus des boutons de direction.
+                // Centrée sur le bloc de direction plutôt que collée au bord : en paysage, la Dynamic Island
+                // mord le bord gauche et passerait par-dessus la barre. Le calcul suit la commande choisie,
+                // le joystick étant bien plus étroit que la paire de flèches.
+                gauge = new WheelieGauge();
+                gauge.Build(driving, theme, controller,
+                    left: margin + Mathf.Max(0f, (steerWidth - S(WheelieGauge.Width)) * 0.5f),
+                    top: margin + TotalsHeight + S(Gap),
+                    bottom: margin + steerHeight + S(Gap));
             }
 
             // Direction dans son propre conteneur : elle se reconstruit si on change de commande en pause.
@@ -301,7 +314,7 @@ namespace WheelingMoto.UI
             if (controller != null)
             {
                 crashMenu = new CrashMenu();
-                crashMenu.Build(root, theme, controller);
+                crashMenu.Build(root, theme, controller, OnQuitToMenu);
             }
             pauseMenu = new PauseMenu();
             pauseMenu.Build(root, theme, OnPauseClosed, OnQuitToMenu);
@@ -414,11 +427,11 @@ namespace WheelingMoto.UI
             float topRow = margin + height + gap;
 
             AddHold(parent, "ThrottleButton", "GAZ", PedalFontSize, corner,
-                new Vector2(rightColumn, bottomRow), new Vector2(rightColumn + width, bottomRow + height),
+                new Vector2(leftColumn, bottomRow), new Vector2(leftColumn + width, bottomRow + height),
                 () => controller?.SetThrottle(true), () => controller?.SetThrottle(false));
 
             AddHold(parent, "LiftButton", "LEVER", PedalFontSize, corner,
-                new Vector2(leftColumn, bottomRow), new Vector2(leftColumn + width, bottomRow + height),
+                new Vector2(leftColumn, topRow), new Vector2(leftColumn + width, topRow + height),
                 () => controller?.SetLift(true), () => controller?.SetLift(false));
 
             AddHold(parent, "FrontBrakeButton", "FREIN AV", PedalFontSize, corner,
@@ -426,7 +439,7 @@ namespace WheelingMoto.UI
                 () => controller?.SetFrontBrake(true), () => controller?.SetFrontBrake(false));
 
             AddHold(parent, "RearBrakeButton", "FREIN AR", PedalFontSize, corner,
-                new Vector2(leftColumn, topRow), new Vector2(leftColumn + width, topRow + height),
+                new Vector2(rightColumn, bottomRow), new Vector2(rightColumn + width, bottomRow + height),
                 () => controller?.SetRearBrake(true), () => controller?.SetRearBrake(false));
         }
 
@@ -455,10 +468,10 @@ namespace WheelingMoto.UI
             fallOverlay.blocksRaycasts = false;
             fallOverlay.alpha = 0f;
 
-            UIFactory.AddText(band.transform, "FallTitle", "CHUTE !", 56, Color.white, TextAnchor.MiddleCenter,
+            UIFactory.AddText(band.transform, "FallTitle", "CHUTE !", UITheme.FontDisplay, Color.white, TextAnchor.MiddleCenter,
                 new Vector2(0.15f, 0.5f), new Vector2(0.85f, 0.5f), new Vector2(0f, -10f), new Vector2(0f, 60f));
             // Le conseil dépend de ce qui a fait tomber le pilote : il est écrit à chaque chute (OnFell).
-            fallHint = UIFactory.AddText(band.transform, "FallHint", "", 18, theme.TextMuted, TextAnchor.MiddleCenter,
+            fallHint = UIFactory.AddText(band.transform, "FallHint", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleCenter,
                 new Vector2(0.15f, 0.5f), new Vector2(0.85f, 0.5f), new Vector2(0f, -55f), new Vector2(0f, -15f));
         }
 

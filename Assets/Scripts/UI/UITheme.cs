@@ -30,6 +30,12 @@ namespace WheelingMoto.UI
         /// L'information qui ne tient pas en gros ne rapetisse pas — elle passe derrière un bouton
         /// « i » et s'affiche en plein écran (voir <see cref="InfoPopup"/>).
         /// </summary>
+        /// <summary>
+        /// Cran au-dessus de l'échelle des menus, réservé aux chiffres lus en roulant : ils doivent se
+        /// saisir d'un coup d'œil périphérique, sans quitter la route. Hors du HUD, rien ne l'utilise.
+        /// </summary>
+        public const int FontReadout = 76;
+
         public const int FontDisplay = 46;
         public const int FontTitle = 34;
         public const int FontHeading = 28;

@@ -50,16 +50,16 @@ namespace WheelingMoto.UI
                 rounded: true).gameObject;
             var cardRect = card.transform;
 
-            UIFactory.AddText(cardRect, "Title", "PAUSE", 54, theme.Text, TextAnchor.MiddleCenter,
+            UIFactory.AddText(cardRect, "Title", "PAUSE", UITheme.FontDisplay, theme.Text, TextAnchor.MiddleCenter,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(32f, -110f), new Vector2(-32f, -30f), TMPro.FontStyles.Bold);
 
-            UIFactory.AddButton(cardRect, "ResumeButton", "REPRENDRE", theme.Accent, theme.Text, 28,
+            UIFactory.AddButton(cardRect, "ResumeButton", "REPRENDRE", theme.Accent, theme.Text, UITheme.FontHeading,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(48f, -222f), new Vector2(-48f, -134f),
                 Close, ButtonKind.Primary);
-            UIFactory.AddButton(cardRect, "SettingsButton", "PARAMÈTRES", theme.PanelAlt, theme.Text, 24,
+            UIFactory.AddButton(cardRect, "SettingsButton", "PARAMÈTRES", theme.PanelAlt, theme.Text, UITheme.FontBody,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(48f, -320f), new Vector2(-48f, -242f),
                 ShowSettings);
-            UIFactory.AddButton(cardRect, "QuitButton", "◀ MENU PRINCIPAL", theme.PanelAlt, theme.TextMuted, 22,
+            UIFactory.AddButton(cardRect, "QuitButton", "◀ MENU PRINCIPAL", theme.PanelAlt, theme.TextMuted, UITheme.FontLabel,
                 new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(48f, -418f), new Vector2(-48f, -340f),
                 QuitToMainMenu);
 
@@ -75,7 +75,7 @@ namespace WheelingMoto.UI
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
             settingsView = view.gameObject;
 
-            UIFactory.AddButton(view.transform, "BackButton", "◀ RETOUR", theme.PanelAlt, theme.Text, 20,
+            UIFactory.AddButton(view.transform, "BackButton", "◀ RETOUR", theme.PanelAlt, theme.Text, UITheme.FontLabel,
                 new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(24f, -76f), new Vector2(244f, -20f),
                 ShowCard);
 

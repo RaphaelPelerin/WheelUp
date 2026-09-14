@@ -113,8 +113,8 @@ namespace WheelingMoto.Gameplay
         [Header("Freins")]
         [Tooltip("Part du freinage maximal de la moto donnée par le seul frein avant : l'essentiel, la charge passe sur la roue avant.")]
         public float frontBrakeShare = 0.85f;
-        [Tooltip("Part du freinage maximal donnée par le seul frein arrière : délestée au freinage, la roue arrière freine peu. Les deux ensemble donnent le freinage maximal.")]
-        public float rearBrakeShare = 0.4f;
+        [Tooltip("Part du freinage maximal donnée par le seul frein arrière. Volontairement plus généreuse que le report de charge réel : c'est la commande qui rabat la roue en wheelie, elle doit rester utile seule. Les deux ensemble donnent le freinage maximal.")]
+        public float rearBrakeShare = 0.65f;
 
         [Header("Conduite")]
         [Tooltip("Frein moteur de base, gaz coupés, en m/s² : renforcé sur les petits rapports et haut dans les tours.")]
