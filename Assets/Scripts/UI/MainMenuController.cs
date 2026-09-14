@@ -312,9 +312,15 @@ namespace WheelingMoto.UI
             pill.raycastTarget = false;
             coinPillObject = pill.gameObject;
 
-            var dot = UIFactory.AddPanel(pill.transform, "CoinDot", theme.Coin,
-                new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(16, -14), new Vector2(44, 14), rounded: true);
-            dot.raycastTarget = false;
+            // Le jeton frappé au logo remplace le disque uni. Repli sur le disque si la ressource
+            // manque : le solde doit rester lisible, une icône absente ne doit pas le décaler.
+            if (UIFactory.AddCoinIcon(pill.transform, "CoinDot",
+                    new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(14, -16), new Vector2(46, 16)) == null)
+            {
+                var dot = UIFactory.AddPanel(pill.transform, "CoinDot", theme.Coin,
+                    new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(16, -14), new Vector2(44, 14), rounded: true);
+                dot.raycastTarget = false;
+            }
 
             coinsLabel = UIFactory.AddText(pill.transform, "CoinsValue", "0", 22, theme.Text, TextAnchor.MiddleLeft,
                 Vector2.zero, Vector2.one, new Vector2(58, 0), new Vector2(-16, 0), FontStyles.Bold);

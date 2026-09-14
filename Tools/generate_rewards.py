@@ -101,9 +101,12 @@ TEXTURE_PROMPTS = {
     "paint": "Glossy off-white spray can body with a dark grey label band and an orange cap",
 }
 
+# Plafond impose par l'API : au-dela, la requete part en 400 sans qu'aucune tache soit creee.
+MAX_PROMPT_CHARS = 800
+
 TARGET_POLYCOUNT = 20000
 POLL_SECONDS = 10
-POLL_TIMEOUT_SECONDS = 900
+POLL_TIMEOUT_SECONDS = 1800
 
 
 def api_key() -> str:
@@ -111,6 +114,16 @@ def api_key() -> str:
     if not key:
         sys.exit("MESHY_API_KEY absente de l'environnement. Définis-la avant de lancer le script.")
     return key
+
+
+def check_prompt(label: str, prompt: str) -> str:
+    """Refuse un prompt trop long ici plutot que de laisser l'API le rejeter en 400."""
+    if len(prompt) > MAX_PROMPT_CHARS:
+        sys.exit(
+            f"{label} : prompt de {len(prompt)} caracteres, maximum {MAX_PROMPT_CHARS}. "
+            f"Raccourcis la description : STYLE et FINISH comptent dans le total."
+        )
+    return prompt
 
 
 def load_state() -> dict:
@@ -174,7 +187,12 @@ def wait_for_all(tasks: dict, key: str, label: str) -> dict:
             time.sleep(POLL_SECONDS)
 
     if tasks:
-        sys.exit(f"  {label} : délai dépassé pour {', '.join(tasks)}.")
+        # Ces tâches sont payées et continuent chez Meshy. Les nommer permet de les reprendre :
+        # sortir sans les afficher revenait à jeter le crédit déjà dépensé.
+        print(f"  {label} : délai dépassé. Tâches encore en cours chez Meshy :", flush=True)
+        for pending_name, pending_task in tasks.items():
+            print(f"    {pending_name} : {pending_task}", flush=True)
+        print("  Relance sans --reshape pour les réutiliser au lieu d'en repayer.", flush=True)
     return done
 
 
@@ -214,20 +232,23 @@ def main() -> None:
 
         response = request("POST", API_URL, key, {
             "mode": "preview",
-            "prompt": f"{SHAPE_PROMPTS[name]}, {STYLE}",
+            "prompt": check_prompt(name, f"{SHAPE_PROMPTS[name]}, {STYLE}"),
             "topology": "triangle",
             "target_polycount": TARGET_POLYCOUNT,
             "should_remesh": True,
         })
         pending[name] = task_id_from(response)
-        print(f"{name} : forme envoyée.", flush=True)
+
+        # Mémorisé tout de suite : la forme est facturée à la création, pas à la réussite. Attendre
+        # la fin de la vague pour l'écrire perdait le crédit dès que l'attente tournait court.
+        state[f"preview_{name}"] = pending[name]
+        save_state(state)
+        print(f"{name} : forme envoyée ({pending[name]}).", flush=True)
 
     if pending:
         print("\nVague 1 — formes :", flush=True)
         for name in wait_for_all(dict(pending), key, "formes"):
             previews[name] = pending[name]
-            state[f"preview_{name}"] = pending[name]
-            save_state(state)
 
     if not previews:
         sys.exit("Aucune forme utilisable, arrêt.")
@@ -238,7 +259,7 @@ def main() -> None:
         response = request("POST", API_URL, key, {
             "mode": "refine",
             "preview_task_id": preview_id,
-            "texture_prompt": f"{TEXTURE_PROMPTS[name]}, {FINISH}",
+            "texture_prompt": check_prompt(name, f"{TEXTURE_PROMPTS[name]}, {FINISH}"),
             "enable_pbr": True,
         })
         refines[name] = task_id_from(response)

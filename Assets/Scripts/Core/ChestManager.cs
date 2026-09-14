@@ -205,7 +205,7 @@ namespace WheelingMoto.Core
                 Title = $"{amount} pièces",
                 Detail = "Ajoutées à ton solde.",
                 Swatch = CoinColor,
-                IconPath = "Rewards/coins",
+                IconPath = "Rewards/coin_logo",
             };
         }
 
@@ -283,7 +283,7 @@ namespace WheelingMoto.Core
                 Title = $"{amount} pièces",
                 Detail = reason,
                 Swatch = CoinColor,
-                IconPath = "Rewards/coins",
+                IconPath = "Rewards/coin_logo",
             };
         }
     }

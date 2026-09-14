@@ -474,6 +474,28 @@ namespace WheelingMoto.UI
             return image;
         }
 
+        public const string CoinIconResourcePath = "Branding/CoinIcon";
+
+        /// <summary>
+        /// Jeton de marque du badge de pièces. Même contrat que <see cref="AddBrandLogo"/> : retourne
+        /// null si l'image manque, à charge de l'appelant de dessiner son propre repli — le solde doit
+        /// rester lisible même sans la ressource.
+        /// </summary>
+        public static Image AddCoinIcon(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            var sprite = Resources.Load<Sprite>(CoinIconResourcePath);
+            if (sprite == null) return null;
+
+            var rt = CreateUIObject(name, parent);
+            SetRect(rt, anchorMin, anchorMax, offsetMin, offsetMax);
+
+            var image = rt.gameObject.AddComponent<Image>();
+            image.sprite = sprite;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            return image;
+        }
+
         /// <summary>
         /// Item de navigation façon barre latérale : pas de fond plein, juste un libellé et une barre
         /// d'indicateur qui s'active quand l'item est sélectionné. locked=true grise l'item, le rend non

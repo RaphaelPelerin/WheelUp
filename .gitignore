@@ -127,3 +127,6 @@ InitTestScene*.unity*
 # Doublon des hooks Git LFS, recree tout seul sous Windows.
 # Les vrais hooks vivent dans .git/hooks : ce dossier-ci est un artefact.
 /dev/null/
+
+# Bytecode Python des outils de generation.
+__pycache__/
