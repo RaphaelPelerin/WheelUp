@@ -46,10 +46,36 @@ namespace WheelingMoto.UI
         Image[] swatchFrames;
         Button[] swatchButtons;
 
-        Image powerBar;
-        Image handlingBar;
-        Image wheelieBar;
+        /// <summary>Ligne de la fiche technique : une barre pour comparer d'un coup d'œil, la vraie valeur à côté.</summary>
+        class StatRow
+        {
+            public Image Fill;
+            public TextMeshProUGUI Value;
+        }
+
+        StatRow topSpeedRow;
+        StatRow accelerationRow;
+        StatRow balanceRow;
+        StatRow brakingRow;
+        StatRow weightRow;
+        StatRow handlingRow;
         readonly List<UpgradeRow> upgradeRows = new List<UpgradeRow>();
+
+        // Fiche technique : six lignes sous l'intitulé, libellé à gauche, valeur à droite, barre entre les deux.
+        const float StatsTop = -140f;
+        const float StatRowHeight = 28f;
+        const float StatRowPitch = 32f;
+        const float StatLabelWidth = 186f;
+        const float StatValueWidth = 140f;
+
+        // Bornes des barres : la meilleure moto du catalogue remplit presque la sienne.
+        const float BarTopSpeedKmh = 340f;
+        const float BarSlowest0To50 = 6f;
+        const float BarQuickest0To50 = 1f;
+        const float BarNarrowBalance = 5f;
+        const float BarWideBalance = 14f;
+        const float BarBrakingMps2 = 11.5f;
+        const float BarWeightKg = 260f;
 
         const float RowHeight = 110f;
         const float RowGap = 14f;
@@ -227,22 +253,23 @@ namespace WheelingMoto.UI
             ownedStateText = UIFactory.AddText(detail, "OwnedState", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -98), new Vector2(-24, -64));
 
-            UIFactory.AddText(detail, "StatsLabel", "Performances", UITheme.FontBody, theme.Text, TextAnchor.MiddleLeft,
+            UIFactory.AddText(detail, "StatsLabel", "Fiche technique", UITheme.FontBody, theme.Text, TextAnchor.MiddleLeft,
                 new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -136), new Vector2(-24, -102));
 
-            powerBar = UIFactory.AddStatBar(detail, "PowerBar", "Puissance", theme,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -166), new Vector2(-24, -136));
-            handlingBar = UIFactory.AddStatBar(detail, "HandlingBar", "Maniabilité", theme,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -202), new Vector2(-24, -172));
-            wheelieBar = UIFactory.AddStatBar(detail, "WheelieBar", "Cabrage", theme,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -238), new Vector2(-24, -208));
+            topSpeedRow = AddStatRow(detail, "TopSpeed", "Vitesse max", 0);
+            accelerationRow = AddStatRow(detail, "Acceleration", "Accélération", 1);
+            balanceRow = AddStatRow(detail, "Balance", "Point d'équilibre", 2);
+            brakingRow = AddStatRow(detail, "Braking", "Freinage", 3);
+            weightRow = AddStatRow(detail, "Weight", "Poids", 4);
+            handlingRow = AddStatRow(detail, "Handling", "Maniabilité", 5);
 
+            float statsBottom = StatsTop - 5 * StatRowPitch - StatRowHeight;
             UIFactory.AddText(detail, "UpgradesLabel", "Améliorations", UITheme.FontBody, theme.Text, TextAnchor.MiddleLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -282), new Vector2(-24, -248));
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, statsBottom - 44), new Vector2(-24, statsBottom - 10));
 
             for (int i = 0; i < MotoUpgrades.Slots.Length; i++)
             {
-                BuildUpgradeRow(detail, MotoUpgrades.Slots[i], -288 - i * 84);
+                BuildUpgradeRow(detail, MotoUpgrades.Slots[i], statsBottom - 50 - i * 84);
             }
 
             buyButton = UIFactory.AddButton(detail, "BuyButton", "ACHETER LA MOTO", theme.Accent, Color.white, UITheme.FontLabel,
@@ -255,6 +282,66 @@ namespace WheelingMoto.UI
 
             equipLabel = equipButton.GetComponentInChildren<TextMeshProUGUI>();
         }
+
+        StatRow AddStatRow(Transform detail, string name, string label, int index)
+        {
+            float yTop = StatsTop - index * StatRowPitch;
+            var row = UIFactory.CreateUIObject("Stat_" + name, detail);
+            UIFactory.SetRect(row, new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, yTop - StatRowHeight), new Vector2(-24, yTop));
+
+            UIFactory.AddText(row, "Label", label, UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 0), new Vector2(0, 1), Vector2.zero, new Vector2(StatLabelWidth, 0));
+            var value = UIFactory.AddText(row, "Value", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleRight,
+                new Vector2(1, 0), new Vector2(1, 1), new Vector2(-StatValueWidth, 0), Vector2.zero);
+
+            var track = UIFactory.AddPanel(row, "Track", theme.PanelAlt, new Vector2(0, 0.5f), new Vector2(1, 0.5f),
+                new Vector2(StatLabelWidth + 8, -7), new Vector2(-StatValueWidth - 10, 7), rounded: true);
+            track.raycastTarget = false;
+
+            var fill = UIFactory.AddPanel(track.transform, "Fill", theme.Accent, Vector2.zero, Vector2.one,
+                Vector2.zero, Vector2.zero, rounded: true);
+            fill.raycastTarget = false;
+            fill.type = Image.Type.Filled;
+            fill.fillMethod = Image.FillMethod.Horizontal;
+            fill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            fill.fillAmount = 0f;
+
+            return new StatRow { Fill = fill, Value = value };
+        }
+
+        /// <summary>
+        /// Fiche technique de la moto, améliorations comprises. Vitesse de pointe, accélération et distance
+        /// de freinage sont mesurées sur la même physique que la conduite : ce qu'affiche le garage est ce que
+        /// le joueur trouvera en piste.
+        /// </summary>
+        void RefreshStats(MotoInfo moto)
+        {
+            MotoStats stats = MotoStats.For(moto);
+            MotoPerformance perf = MotoDrivetrain.Measure(stats);
+
+            SetStat(topSpeedRow, perf.TopSpeedKmh / BarTopSpeedKmh, $"{Mathf.RoundToInt(perf.TopSpeedKmh)} km/h");
+
+            // Les mécaboites n'atteignent pas 100 km/h : leur accélération se lit sur le 0 à 50.
+            string acceleration = perf.ZeroTo100 > 0f ? $"0-100 : {Decimal(perf.ZeroTo100)} s" : $"0-50 : {Decimal(perf.ZeroTo50)} s";
+            SetStat(accelerationRow, Mathf.InverseLerp(BarSlowest0To50, BarQuickest0To50, perf.ZeroTo50), acceleration);
+
+            // La barre dit la facilité à tenir (largeur de zone), la valeur donne l'angle à viser.
+            SetStat(balanceRow, Mathf.InverseLerp(BarNarrowBalance, BarWideBalance, stats.BalanceWidth),
+                $"{Mathf.RoundToInt(stats.BalanceAngle)}° ±{Decimal(stats.BalanceWidth * 0.5f)}°");
+
+            SetStat(brakingRow, stats.BrakingMps2 / BarBrakingMps2, $"100-0 : {Mathf.RoundToInt(perf.BrakingFrom100)} m");
+            SetStat(weightRow, stats.WeightKg / BarWeightKg, $"{Mathf.RoundToInt(stats.WeightKg)} kg");
+            SetStat(handlingRow, stats.Handling / MotoStats.MaxHandling, $"{Decimal(stats.Handling)} / 10");
+        }
+
+        static void SetStat(StatRow row, float fill, string value)
+        {
+            row.Fill.fillAmount = Mathf.Clamp01(fill);
+            row.Value.text = value;
+        }
+
+        /// <summary>Un chiffre après la virgule, à la française, sans dépendre des cultures du téléphone.</summary>
+        static string Decimal(float value) => value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',');
 
         void BuildUpgradeRow(Transform detail, UpgradeSlot slot, float yTop)
         {
@@ -327,10 +414,7 @@ namespace WheelingMoto.UI
                 UIFactory.SetButtonColor(equipButton, equipped ? theme.PanelAlt : theme.Accent);
             }
 
-            var stats = MotoStats.For(moto);
-            powerBar.fillAmount = stats.Power / MotoStats.MaxValue;
-            handlingBar.fillAmount = stats.Handling / MotoStats.MaxValue;
-            wheelieBar.fillAmount = stats.Wheelie / MotoStats.MaxValue;
+            RefreshStats(moto);
 
             RefreshUpgrades(moto, owned);
 

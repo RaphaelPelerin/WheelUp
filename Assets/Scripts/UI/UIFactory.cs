@@ -146,6 +146,99 @@ namespace WheelingMoto.UI
             return sprite;
         }
 
+        // Coins « continus » à la manière d'iOS : l'arrondi ne commence pas d'un coup au bout d'un segment droit,
+        // la courbure monte progressivement. Approché par une superellipse d'exposant 5, étalée sur 1,53 fois
+        // le rayon nominal (c'est la longueur sur laquelle iOS raccorde ses coins).
+        const float ContinuousCornerExponent = 5f;
+        const float ContinuousCornerSpread = 1.528f;
+        // Résolution du quart de coin dans la texture, en pixels : large, pour rester lisse sur les grands boutons.
+        const int ContinuousCornerPixels = 96;
+        // Rayon des coins de dalle des iPhone récents, en part du petit côté de l'écran : 55 pt sur 393 pour un
+        // 15 Pro, 62 sur 402 pour un 16 Pro, 47 sur 390 pour un 13.
+        const float ScreenCornerShare = 0.14f;
+
+        static Sprite cachedContinuousCornerSprite;
+
+        /// <summary>
+        /// Rayon des coins de l'écran d'un iPhone, en unités de canvas : environ 14 % du petit côté de la dalle.
+        /// Calculé sur l'écran courant, pour que l'éditeur montre la même courbure que le téléphone.
+        /// </summary>
+        public static float ScreenCornerRadius()
+        {
+            if (Screen.width <= 0 || Screen.height <= 0) return ReferenceResolution.y * ScreenCornerShare;
+
+            float scale = Mathf.Sqrt(Screen.width / ReferenceResolution.x * (Screen.height / ReferenceResolution.y));
+            return Mathf.Min(Screen.width, Screen.height) * ScreenCornerShare / Mathf.Max(0.0001f, scale);
+        }
+
+        /// <summary>
+        /// Habille une image des coins de l'écran d'iPhone : même rayon que la dalle, même courbure continue.
+        /// Sur un bouton plus petit que ce rayon, l'arrondi est ramené à ce que le bouton peut porter (sa
+        /// courbe tient alors sur la moitié de son petit côté), pour ne jamais le transformer en pilule.
+        /// La taille du rectangle doit être connue : ancres ponctuelles, ou mise en page déjà calculée.
+        /// </summary>
+        public static void ApplyScreenCorners(Image image)
+        {
+            Vector2 size = image.rectTransform.rect.size;
+            float shortSide = Mathf.Min(size.x, size.y);
+            if (shortSide <= 0f) return;
+
+            float radius = Mathf.Min(ScreenCornerRadius(), shortSide * 0.5f / ContinuousCornerSpread);
+            float spread = radius * ContinuousCornerSpread;
+
+            image.sprite = ContinuousCornerSprite;
+            image.type = Image.Type.Sliced;
+            // La bordure du sprite couvre toute la courbe : on l'étire pour qu'elle mesure « spread » unités.
+            image.pixelsPerUnitMultiplier = ContinuousCornerPixels / Mathf.Max(1f, spread);
+        }
+
+        static Sprite ContinuousCornerSprite
+        {
+            get
+            {
+                if (cachedContinuousCornerSprite == null) cachedContinuousCornerSprite = CreateContinuousCornerSprite();
+                return cachedContinuousCornerSprite;
+            }
+        }
+
+        /// <summary>Texture blanche aux coins continus, découpée en 9 tranches : la bordure porte toute la courbe.</summary>
+        static Sprite CreateContinuousCornerSprite()
+        {
+            int e = ContinuousCornerPixels;
+            int size = e * 2 + 2;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "ContinuousCorners",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    // Enfoncement dans la zone de coin la plus proche, de 0 (bord intérieur) à 1 (coin extérieur).
+                    float u = Mathf.Max(0f, e - (x + 0.5f), (x + 0.5f) - (size - e)) / e;
+                    float v = Mathf.Max(0f, e - (y + 0.5f), (y + 0.5f) - (size - e)) / e;
+                    float f = Mathf.Pow(Mathf.Pow(u, ContinuousCornerExponent) + Mathf.Pow(v, ContinuousCornerExponent), 1f / ContinuousCornerExponent);
+                    // Bord à f = 1, lissé sur un pixel.
+                    float alpha = Mathf.Clamp01((1f - f) * e + 0.5f);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(alpha * 255f));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+
+            var border = new Vector4(e, e, e, e);
+            var sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, border);
+            sprite.name = "ContinuousCorners";
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+            return sprite;
+        }
+
         /// <summary>Résolution de référence des canvas : tous les gabarits d'interface sont exprimés dans ces unités.</summary>
         public static readonly Vector2 ReferenceResolution = new Vector2(1920f, 1080f);
 

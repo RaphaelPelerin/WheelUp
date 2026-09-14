@@ -35,15 +35,16 @@ namespace WheelingMoto.Gameplay
     /// collisions avec le décor et gravité, sans l'instabilité d'une vraie physique deux-roues.
     ///
     /// Commandes : GAZ accélère seulement ; LEVER accélère aussi et lève la roue avant ;
-    /// FREIN freine, rabat la roue avant en wheeling, lève l'arrière s'il est tenu fort à bonne vitesse,
-    /// et fait reculer une fois à l'arrêt.
+    /// FREIN AV porte l'essentiel du freinage et lève l'arrière s'il reste serré à bonne vitesse ;
+    /// FREIN AR freine plus doucement, sans couper les gaz, et rabat la roue avant en wheeling ;
+    /// l'un ou l'autre fait reculer, maintenu à l'arrêt.
     ///
     /// Trois mécaniques sont simulées à part, sur le pivot visuel :
     /// - le wheeling, autour du point de contact du pneu arrière, en trois zones : sous la zone
     ///   d'équilibre la gravité rabat la roue ; dans la zone elle ne dérive que faiblement, mais les
-    ///   bosses de la route perturbent l'angle en permanence (tenue au dosage LEVER / FREIN) ;
+    ///   bosses de la route perturbent l'angle en permanence (tenue au dosage LEVER / FREIN AR) ;
     ///   au-delà, la moto part en arrière et seul le frein la rattrape ;
-    /// - la roue avant (stoppie), autour du contact du pneu avant, sur le même principe : FREIN lève
+    /// - la roue avant (stoppie), autour du contact du pneu avant, sur le même principe : FREIN AV lève
     ///   l'arrière, le relâcher le repose ; au-delà de la zone d'équilibre rien ne rattrape la moto,
     ///   elle passe par-dessus la roue avant ;
     /// - la direction, qui passe par l'inclinaison (lean), prise progressivement (ressort amorti,
@@ -53,6 +54,9 @@ namespace WheelingMoto.Gameplay
     ///
     /// Deux sources d'entrée cohabitent : les boutons tactiles (mobile) et le clavier (test PC).
     /// </summary>
+    // Avant le HUD et la caméra : la fiche technique (zones du wheeling, angle maximal) doit être appliquée
+    // quand ils se construisent en lisant ces réglages.
+    [DefaultExecutionOrder(-50)]
     [RequireComponent(typeof(CharacterController))]
     public class MotorcycleController : MonoBehaviour
     {
@@ -102,15 +106,23 @@ namespace WheelingMoto.Gameplay
         [Tooltip("Matériau émissif des optiques (phare, feu arrière, clignotants). Référencé ici pour que la variante émissive du shader soit incluse dans les builds.")]
         public Material lightMaterial;
 
+        // Puissance, poids, boîte, freinage, point d'équilibre et maniabilité ne se règlent pas ici : ils viennent
+        // de la fiche technique de la moto équipée (MotoCatalog, améliorations comprises), appliquée au
+        // démarrage (voir ApplyStats). Ne restent ici que les réglages communs à toutes les motos.
+
+        [Header("Freins")]
+        [Tooltip("Part du freinage maximal de la moto donnée par le seul frein avant : l'essentiel, la charge passe sur la roue avant.")]
+        public float frontBrakeShare = 0.85f;
+        [Tooltip("Part du freinage maximal donnée par le seul frein arrière : délestée au freinage, la roue arrière freine peu. Les deux ensemble donnent le freinage maximal.")]
+        public float rearBrakeShare = 0.4f;
+
         [Header("Conduite")]
-        public float maxSpeed = 15.5f;
-        [Tooltip("Reprise à l'ouverture des gaz : nerveuse, la moto prend sa vitesse en une seconde environ.")]
-        public float acceleration = 13.5f;
-        [Tooltip("Freinage roue avant au sol : mordant, la moto s'arrête court.")]
-        public float brakingDeceleration = 26f;
-        public float naturalDeceleration = 4f;
-        [Tooltip("Multiplicateur d'accélération avec LEVER : gaz en grand pour lever la roue.")]
-        public float liftAccelerationBoost = 1.6f;
+        [Tooltip("Frein moteur de base, gaz coupés, en m/s² : renforcé sur les petits rapports et haut dans les tours.")]
+        public float engineBraking = 1.2f;
+        [Tooltip("Adhérence en plus avec LEVER : embrayage lâché, la roue avant se lève et le pneu arrière tire à fond.")]
+        public float liftAccelerationBoost = 1.15f;
+        [Tooltip("Vitesse à laquelle la conduite et les figures sont réputées « rapides », en m/s : lissage de l'inclinaison, bosses sous la roue levée, levée de l'arrière au freinage, bonus de lenteur des prouesses, force de l'éjection. Volontairement distincte de la vitesse de pointe : l'équilibre des figures ne bouge pas avec la puissance.")]
+        public float handlingFullSpeed = 15.5f;
 
         [Header("Marche arrière")]
         public float reverseMaxSpeed = 3f;
@@ -119,7 +131,7 @@ namespace WheelingMoto.Gameplay
         public float reverseTurnRate = 55f;
 
         [Header("Direction (inclinaison)")]
-        [Tooltip("Angle de carrossage maximum, en degrés.")]
+        [Tooltip("Angle maximum, en degrés. Remplacé au démarrage selon la maniabilité de la moto équipée.")]
         public float maxLeanAngle = 40f;
         [Tooltip("Vitesse (m/s) à partir de laquelle l'inclinaison maximale est atteignable. Une vraie moto penche peu à basse vitesse.")]
         public float leanFullSpeed = 7f;
@@ -196,7 +208,7 @@ namespace WheelingMoto.Gameplay
         public float groundProbeHeight = 200f;
 
         [Header("Wheeling - zones d'angle")]
-        [Tooltip("Début de la zone d'équilibre, en degrés.")]
+        [Tooltip("Début de la zone d'équilibre, en degrés. Les trois angles sont remplacés au démarrage par le point d'équilibre de la moto équipée.")]
         public float wheelieSweetMin = 34f;
         [Tooltip("Fin de la zone d'équilibre : au-delà, la moto part en arrière (zone critique).")]
         public float wheelieSweetMax = 42f;
@@ -205,9 +217,9 @@ namespace WheelingMoto.Gameplay
 
         [Header("Wheeling - couples (degrés/s²)")]
         [Tooltip("Levée donnée par LEVER roue au sol et en montée : forte, la roue décolle sèchement.")]
-        public float wheelieLiftTorque = 250f;
-        [Tooltip("Levée donnée par LEVER une fois dans la zone d'équilibre : modérée, pour pouvoir doser.")]
-        public float wheelieHoldTorque = 42f;
+        public float wheelieLiftTorque = 320f;
+        [Tooltip("Levée donnée par LEVER une fois dans la zone d'équilibre : elle reste forte, comme des gaz qui restent ouverts. LEVER tenu en continu fait passer la moto en arrière en une seconde environ : on tient le point d'équilibre par petites touches de LEVER et de FREIN AR.")]
+        public float wheelieHoldTorque = 170f;
         [Tooltip("Frein arrière dans la zone de montée et d'équilibre : il rabat la roue aussi vite qu'elle monte.")]
         public float wheelieBrakeTorque = 215f;
         [Tooltip("Frein arrière en zone critique : appliqué en plus d'un arrêt net de la montée.")]
@@ -220,8 +232,8 @@ namespace WheelingMoto.Gameplay
         public float criticalPush = 145f;
         [Tooltip("Rappel vers le sol quand la moto roule trop lentement pour tenir la roue.")]
         public float stalledPull = 90f;
-        [Tooltip("Amortissement : bas = moto vive qui dépasse sa cible, haut = moto docile.")]
-        public float wheelieDamping = 2f;
+        [Tooltip("Amortissement du wheeling : bas = moto vive qui dépasse sa cible, haut = moto docile.")]
+        public float wheelieDamping = 1.2f;
         public float wheelieMinSpeed = 1.5f;
         [Tooltip("Perturbation due aux bosses de la route, roue avant levée : empêche de tenir le wheeling sans corriger.")]
         public float wheelieBumpTorque = 30f;
@@ -229,7 +241,15 @@ namespace WheelingMoto.Gameplay
         public float wheelieBumpFrequency = 1.7f;
 
         [Header("Roue avant (stoppie)")]
-        [Tooltip("Vitesse (m/s) sous laquelle FREIN ne tient plus l'arrière levé : il retombe.")]
+        [Tooltip("Durée d'appui sur FREIN AV avant que l'arrière commence à se lever, en secondes. En dessous, on freine normalement : la roue avant se mérite en gardant le frein serré.")]
+        public float stoppieBrakeHoldTime = 0.35f;
+        [Tooltip("Une fois ce délai passé, temps pendant lequel la levée de l'arrière monte en puissance, en secondes.")]
+        public float stoppieEngageTime = 0.15f;
+        [Tooltip("Vitesse (m/s) à partir de laquelle FREIN AV lève l'arrière à pleine force (11 : 40 km/h). La levée faiblit en dessous.")]
+        public float stoppieFullLiftSpeed = 11f;
+        [Tooltip("Amortissement de la roue avant : plus élevé que celui du wheeling, la moto y reste docile.")]
+        public float stoppieDamping = 2f;
+        [Tooltip("Vitesse (m/s) sous laquelle FREIN AV ne tient plus l'arrière levé : il retombe.")]
         public float stoppieMinSpeed = 4f;
         [Tooltip("Début de la zone d'équilibre sur la roue avant, en degrés.")]
         public float stoppieSweetMin = 16f;
@@ -237,11 +257,11 @@ namespace WheelingMoto.Gameplay
         public float stoppieSweetMax = 24f;
         [Tooltip("Angle de chute vers l'avant.")]
         public float stoppieFallAngle = 45f;
-        [Tooltip("Levée de l'arrière par FREIN à pleine vitesse, en degrés/s² : proportionnelle à la vitesse, il faut freiner fort en roulant vite.")]
+        [Tooltip("Levée de l'arrière par FREIN AV à pleine vitesse, en degrés/s² : proportionnelle à la vitesse, il faut freiner fort en roulant vite.")]
         public float stoppieLiftTorque = 350f;
-        [Tooltip("Levée par FREIN une fois dans la zone d'équilibre : modérée, pour pouvoir doser.")]
+        [Tooltip("Levée par FREIN AV une fois dans la zone d'équilibre : modérée, pour pouvoir doser.")]
         public float stoppieHoldTorque = 40f;
-        [Tooltip("Retour de l'arrière vers le sol quand on relâche FREIN.")]
+        [Tooltip("Retour de l'arrière vers le sol quand on relâche FREIN AV.")]
         public float stoppieReleaseTorque = 120f;
         [Tooltip("Rappel vers le sol sous la zone d'équilibre.")]
         public float stoppieLowPull = 110f;
@@ -275,8 +295,6 @@ namespace WheelingMoto.Gameplay
         public float respawnBackOff = 1.4f;
         [Tooltip("Vitesse de la moto au respawn.")]
         public float respawnSpeed = 0f;
-        [Tooltip("Efficacité du freinage pendant un wheeling (seul le frein arrière porte).")]
-        public float brakeFactorDuringWheelie = 0.35f;
 
         /// <summary>
         /// Chute : le pilote quitte la selle et la moto reste à terre, jusqu'à <see cref="RequestRespawn"/>.
@@ -286,6 +304,13 @@ namespace WheelingMoto.Gameplay
         public event Action Respawned;
 
         const float GravityConstant = 9.81f;
+        // Masse de référence des réglages de direction de l'Inspector : une roadster moyenne et son pilote, en kg.
+        const float HandlingReferenceMass = 290f;
+        // Angle maximal selon la maniabilité, de 0 à 10.
+        const float MinLeanAngle = 42f;
+        const float MaxLeanAngle = 52f;
+        // Au-delà de la zone d'équilibre, marge avant le basculement irrécupérable, en degrés.
+        const float FallMarginAngle = 26f;
         const float BumpNoiseSeed = 7.31f;
         const float HandlebarMaxRate = 300f;
         // Poignée de gaz : ouverte et refermée d'un coup de poignet, pour aller avec la reprise de la moto.
@@ -347,19 +372,26 @@ namespace WheelingMoto.Gameplay
         float fallSide = 1f;
         RiderEjection riderEjection;
         MotoRagdoll wreck;
+        MotoStats stats;
+        MotoDrivetrain drivetrain;
         MotoCameraRig cameraRig;
         // Après un respawn, LEVER doit être relâché : sinon un bouton resté enfoncé relancerait la chute.
         bool wheelieNeedsRelease;
+        // Temps passé FREIN AV serré, roue avant au sol : la roue avant ne vient qu'après un appui prolongé.
+        float brakeHeldFor;
 
         // Entrées tactiles (HUD) et clavier (test PC), fusionnées à chaque frame.
-        bool touchThrottle, touchBrake, touchLift;
+        bool touchThrottle, touchFrontBrake, touchRearBrake, touchLift;
         float touchSteer;
-        bool keyThrottle, keyBrake, keyLift;
+        bool keyThrottle, keyFrontBrake, keyRearBrake, keyLift;
         float keySteer;
 
         bool Lift => touchLift || keyLift;
         bool Accelerate => touchThrottle || keyThrottle || Lift;
-        bool Brake => touchBrake || keyBrake;
+        bool FrontBrake => touchFrontBrake || keyFrontBrake;
+        bool RearBrake => touchRearBrake || keyRearBrake;
+        /// <summary>L'un ou l'autre des freins : feu stop, marche arrière à l'arrêt.</summary>
+        bool Brake => FrontBrake || RearBrake;
         float Steer => Mathf.Clamp(touchSteer + keySteer, -1f, 1f);
 
         /// <summary>Vrai tant que le pilote est à terre : la moto attend que le joueur demande le respawn.</summary>
@@ -467,6 +499,9 @@ namespace WheelingMoto.Gameplay
 
         void Awake()
         {
+            // Fiche technique de la moto équipée, avant tout ce qui lit puissance, zones ou maniabilité.
+            ApplyStats(MotoStats.For(Loadout.Selected));
+
             // En tout premier : la caméra et le calage au sol (Start) partent ainsi de la bonne position.
             if (spawnPoint != null)
             {
@@ -779,7 +814,8 @@ namespace WheelingMoto.Gameplay
 
         public void SetThrottle(bool held) => touchThrottle = held;
         public void SetLift(bool held) => touchLift = held;
-        public void SetBrake(bool held) => touchBrake = held;
+        public void SetFrontBrake(bool held) => touchFrontBrake = held;
+        public void SetRearBrake(bool held) => touchRearBrake = held;
         public void SetSteer(float value) => touchSteer = Mathf.Clamp(value, -1f, 1f);
 
         void Update()
@@ -826,7 +862,10 @@ namespace WheelingMoto.Gameplay
             ApplyPose(forkParts, forkCompression);
         }
 
-        /// <summary>Clavier pour tester sur PC : ZQSD/WASD ou flèches ; espace = LEVER, R = repartir après une chute.</summary>
+        /// <summary>
+        /// Clavier pour tester sur PC : ZQSD/WASD ou flèches ; espace = LEVER ; S ou flèche bas = frein avant,
+        /// X ou Maj gauche = frein arrière ; R = repartir après une chute.
+        /// </summary>
         void ReadKeyboard()
         {
 #if ENABLE_INPUT_SYSTEM
@@ -835,7 +874,8 @@ namespace WheelingMoto.Gameplay
 
             if (isFallen && kb.rKey.wasPressedThisFrame) RequestRespawn();
             keyThrottle = kb.wKey.isPressed || kb.zKey.isPressed || kb.upArrowKey.isPressed;
-            keyBrake = kb.sKey.isPressed || kb.downArrowKey.isPressed;
+            keyFrontBrake = kb.sKey.isPressed || kb.downArrowKey.isPressed;
+            keyRearBrake = kb.xKey.isPressed || kb.leftShiftKey.isPressed;
             keyLift = kb.spaceKey.isPressed;
 
             bool left = kb.aKey.isPressed || kb.qKey.isPressed || kb.leftArrowKey.isPressed;
@@ -844,7 +884,8 @@ namespace WheelingMoto.Gameplay
 #else
             if (isFallen && Input.GetKeyDown(KeyCode.R)) RequestRespawn();
             keyThrottle = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.Z) || Input.GetKey(KeyCode.UpArrow);
-            keyBrake = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
+            keyFrontBrake = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
+            keyRearBrake = Input.GetKey(KeyCode.X) || Input.GetKey(KeyCode.LeftShift);
             keyLift = Input.GetKey(KeyCode.Space);
 
             bool left = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.Q) || Input.GetKey(KeyCode.LeftArrow);
@@ -853,35 +894,103 @@ namespace WheelingMoto.Gameplay
 #endif
         }
 
+        /// <summary>
+        /// Vitesse, d'après le moteur et la boîte de la moto équipée (voir <see cref="MotoDrivetrain"/>) : chaque
+        /// rapport tire puis s'essouffle, la boîte passe le suivant avec une courte coupure, l'air freine de plus
+        /// en plus fort, et la vitesse de pointe arrive au limiteur du dernier rapport ou quand la puissance ne
+        /// suffit plus.
+        /// </summary>
         void UpdateSpeed(float dt)
         {
-            if (Brake)
+            float speed = Mathf.Abs(currentSpeed);
+            float resistance = drivetrain.Resistance(speed);
+            bool stopped = currentSpeed <= 0.05f;
+            // Les gaz restent ouverts sous le frein arrière : c'est ainsi qu'on tient un wheeling, gaz en grand et
+            // pied sur la pédale. Le frein avant, lui, se serre gaz coupés.
+            bool driving = Accelerate && currentSpeed >= 0f && !FrontBrake;
+            // Avec LEVER, embrayage lâché : le pneu arrière tire plus fort, la roue avant se lève.
+            float thrust = drivetrain.Drive(speed, driving, Lift ? liftAccelerationBoost : 1f, dt);
+            float braking = BrakingDeceleration();
+
+            if (stopped && Brake && !Accelerate)
             {
-                if (currentSpeed > 0.05f)
+                // À l'arrêt, rester appuyé sur l'un ou l'autre frein fait reculer lentement.
+                if (wheelieAngle < 1f && stoppieAngle < 1f)
                 {
-                    // Roue avant en l'air : seul le frein arrière porte, le freinage est bien plus faible.
-                    // Sur la roue avant, il est adouci pour laisser le temps de doser l'équilibre.
-                    float strength = brakingDeceleration * (wheelieAngle > 1f ? brakeFactorDuringWheelie : 1f);
-                    strength = Mathf.Lerp(strength, stoppieBrakeDeceleration, RearWheelUp());
-                    currentSpeed = Mathf.MoveTowards(currentSpeed, 0f, strength * dt);
-                }
-                else if (wheelieAngle < 1f && stoppieAngle < 1f)
-                {
-                    // À l'arrêt, maintenir le frein fait reculer lentement.
                     currentSpeed = Mathf.MoveTowards(currentSpeed, -reverseMaxSpeed, reverseAcceleration * dt);
                 }
             }
-            else if (Accelerate)
+            else if (currentSpeed < 0f)
             {
-                // En marche arrière, les gaz commencent par arrêter la moto. Avec LEVER, gaz en grand.
-                float rate = currentSpeed < 0f ? brakingDeceleration : acceleration * (Lift ? liftAccelerationBoost : 1f);
-                currentSpeed = Mathf.MoveTowards(currentSpeed, maxSpeed, rate * dt);
+                // Marche arrière interrompue (frein relâché ou gaz) : la moto s'arrête.
+                float stop = Accelerate ? stats.BrakingMps2 : drivetrain.EngineBraking(engineBraking) + resistance;
+                currentSpeed = Mathf.MoveTowards(currentSpeed, 0f, stop * dt);
+            }
+            else if (driving)
+            {
+                currentSpeed = Mathf.Max(0f, currentSpeed + (thrust - resistance - braking) * dt);
+            }
+            else if (braking > 0f)
+            {
+                currentSpeed = Mathf.MoveTowards(currentSpeed, 0f, (braking + resistance) * dt);
             }
             else
             {
-                currentSpeed = Mathf.MoveTowards(currentSpeed, 0f, naturalDeceleration * dt);
+                float deceleration = drivetrain.EngineBraking(engineBraking) + resistance;
+                currentSpeed = Mathf.MoveTowards(currentSpeed, 0f, deceleration * dt);
             }
         }
+
+        /// <summary>
+        /// Freinage des deux roues, en m/s². Le frein avant porte l'essentiel : en freinant, la charge passe sur
+        /// la roue avant. Seul, le frein arrière ralentit franchement moins. Une roue en l'air ne freine rien :
+        /// l'avant en wheeling, l'arrière sur la roue avant. Sur la roue avant, le freinage est adouci pour
+        /// laisser le temps de doser l'équilibre.
+        /// </summary>
+        float BrakingDeceleration()
+        {
+            if (!Brake) return 0f;
+
+            float front = FrontBrake ? stats.BrakingMps2 * frontBrakeShare * (1f - FrontWheelUp()) : 0f;
+            float rear = RearBrake ? stats.BrakingMps2 * rearBrakeShare * (1f - RearWheelUp()) : 0f;
+            float total = Mathf.Min(front + rear, stats.BrakingMps2);
+            return Mathf.Lerp(total, FrontBrake ? stoppieBrakeDeceleration : 0f, RearWheelUp());
+        }
+
+        /// <summary>
+        /// Applique la fiche technique de la moto équipée : moteur et boîte, freinage, point d'équilibre du
+        /// wheeling, et maniabilité. Celle-ci agit sur les réglages de direction de l'Inspector, pris comme
+        /// ceux d'une roadster moyenne : une moto vive et légère se met sur l'angle plus vite et plus loin,
+        /// une moto lourde et placide plus lentement.
+        /// </summary>
+        void ApplyStats(MotoStats motoStats)
+        {
+            stats = motoStats;
+            drivetrain = new MotoDrivetrain(stats);
+
+            float handling = Mathf.Clamp01(stats.Handling / MotoStats.MaxHandling);
+            float massScale = Mathf.Sqrt(stats.TotalMassKg / HandlingReferenceMass);
+            float response = Mathf.Lerp(1.3f, 0.75f, handling) * massScale;
+            maxLeanAngle = Mathf.Lerp(MinLeanAngle, MaxLeanAngle, handling);
+            leanSmoothTimeLowSpeed *= response;
+            leanSmoothTimeHighSpeed *= response;
+            maxLeanRate *= Mathf.Lerp(0.8f, 1.25f, handling) / massScale;
+
+            float halfWidth = Mathf.Max(1f, stats.BalanceWidth) * 0.5f;
+            wheelieSweetMin = stats.BalanceAngle - halfWidth;
+            wheelieSweetMax = stats.BalanceAngle + halfWidth;
+            wheelieFallAngle = wheelieSweetMax + FallMarginAngle;
+        }
+
+        /// <summary>Fiche technique appliquée : celle de la moto équipée, améliorations comprises.</summary>
+        public MotoStats Stats => stats;
+        /// <summary>Rapport engagé, de 1 au nombre de rapports.</summary>
+        public int Gear => drivetrain != null ? drivetrain.Gear : 1;
+        /// <summary>Régime moteur, en tr/min.</summary>
+        public float EngineRpm => drivetrain != null ? drivetrain.Rpm : 0f;
+
+        /// <summary>Vitesse ramenée à la plage où la conduite et les figures sont réputées « rapides », de 0 à 1.</summary>
+        public float HandlingSpeedFactor => Mathf.Clamp01(Mathf.Abs(currentSpeed) / Mathf.Max(0.1f, handlingFullSpeed));
 
         void UpdateWheelie(float dt)
         {
@@ -906,7 +1015,9 @@ namespace WheelingMoto.Gameplay
                 torque -= stalledPull;
             }
 
-            if (Brake)
+            // Seul le frein arrière rabat la roue avant : celui de l'avant ne fait qu'arrêter une roue qui tourne
+            // dans le vide.
+            if (RearBrake)
             {
                 if (critical)
                 {
@@ -953,7 +1064,7 @@ namespace WheelingMoto.Gameplay
         float WheelieBumpTorque()
         {
             float noise = Mathf.PerlinNoise(Time.time * wheelieBumpFrequency, BumpNoiseSeed) * 2f - 1f;
-            float speedFactor = Mathf.Lerp(0.5f, 1f, Mathf.Clamp01(currentSpeed / Mathf.Max(0.1f, maxSpeed)));
+            float speedFactor = Mathf.Lerp(0.5f, 1f, HandlingSpeedFactor);
             return noise * wheelieBumpTorque * speedFactor;
         }
 
@@ -981,7 +1092,7 @@ namespace WheelingMoto.Gameplay
         }
 
         /// <summary>
-        /// Roue avant (stoppie), sur le modèle du wheeling. FREIN tenu à bonne vitesse bascule la moto vers
+        /// Roue avant (stoppie), sur le modèle du wheeling. FREIN AV tenu à bonne vitesse bascule la moto vers
         /// l'avant, d'autant plus fort qu'elle roule vite, puis tient modérément une fois dans la zone
         /// d'équilibre ; le relâcher repose l'arrière. Les bosses perturbent l'angle, et trop lente, la moto
         /// ne tient plus : l'arrière retombe. Au-delà de la zone d'équilibre, rien ne la rattrape.
@@ -999,17 +1110,23 @@ namespace WheelingMoto.Gameplay
             {
                 torque = StoppieGravityTorque(stoppieAngle);
 
+                // Appui court : freinage normal. Appui prolongé : l'arrière se lève, de plus en plus fort.
+                // Le compte repart de zéro au relâchement, et tant que la roue avant est en l'air : freiner pour
+                // reposer un wheeling ne doit pas enchaîner sur une roue avant.
+                brakeHeldFor = FrontBrake && wheelieAngle <= 0f ? brakeHeldFor + dt : 0f;
+                float engage = Mathf.InverseLerp(stoppieBrakeHoldTime, stoppieBrakeHoldTime + stoppieEngageTime, brakeHeldFor);
+
                 bool canLift = wheelieAngle <= 0f && currentSpeed >= stoppieMinSpeed;
-                if (Brake && canLift)
+                if (FrontBrake && canLift && (engage > 0f || stoppieAngle > 0f))
                 {
-                    float speedFactor = Mathf.InverseLerp(stoppieMinSpeed, maxSpeed, currentSpeed);
+                    float speedFactor = Mathf.InverseLerp(stoppieMinSpeed, stoppieFullLiftSpeed, currentSpeed);
                     float blend = Mathf.InverseLerp(stoppieSweetMin * 0.5f, stoppieSweetMin, stoppieAngle);
-                    torque += Mathf.Lerp(stoppieLiftTorque * speedFactor, stoppieHoldTorque, blend);
+                    torque += Mathf.Lerp(stoppieLiftTorque * speedFactor * engage, stoppieHoldTorque, blend);
                 }
                 else if (stoppieAngle > 0f)
                 {
                     // Frein relâché, l'arrière se repose ; trop lente, la moto ne tient plus sur la roue avant.
-                    torque -= Brake ? stalledPull : stoppieReleaseTorque;
+                    torque -= FrontBrake ? stalledPull : stoppieReleaseTorque;
                 }
 
                 if (stoppieAngle > 1f)
@@ -1019,7 +1136,7 @@ namespace WheelingMoto.Gameplay
             }
 
             stoppieAngularVelocity += torque * dt;
-            stoppieAngularVelocity -= stoppieAngularVelocity * wheelieDamping * dt;
+            stoppieAngularVelocity -= stoppieAngularVelocity * stoppieDamping * dt;
             stoppieAngle += stoppieAngularVelocity * dt;
 
             if (stoppieAngle <= 0f)
@@ -1073,7 +1190,7 @@ namespace WheelingMoto.Gameplay
             float targetLean = -Steer * maxLeanAngle * speedFactor * wheelieFactor;
 
             float smoothTime = Mathf.Lerp(leanSmoothTimeLowSpeed, leanSmoothTimeHighSpeed,
-                Mathf.Clamp01(currentSpeed / Mathf.Max(0.1f, maxSpeed)));
+                HandlingSpeedFactor);
             smoothTime *= Mathf.Lerp(1f, wheelieLeanSlowdown, frontWheelUp);
             currentLean = Mathf.SmoothDamp(currentLean, targetLean, ref leanVelocity, smoothTime, maxLeanRate, dt);
 
@@ -1137,7 +1254,7 @@ namespace WheelingMoto.Gameplay
                 : Mathf.Abs(leanVelocity) > FallSideLeanRate ? Mathf.Sign(leanVelocity)
                 : (UnityEngine.Random.value < 0.5f ? -1f : 1f);
             // Commandes relâchées : un bouton resté enfoncé ne doit rien piloter d'une moto à terre.
-            touchThrottle = touchBrake = touchLift = false;
+            touchThrottle = touchFrontBrake = touchRearBrake = touchLift = false;
             touchSteer = 0f;
 
             // Moto d'abord : le pilote a besoin de ses formes pour ne pas s'y cogner en partant.
@@ -1189,7 +1306,11 @@ namespace WheelingMoto.Gameplay
                 // La roue avant bute : l'arrière monte d'autant plus vite que le choc est rapide.
                 spin += right * (Mathf.Abs(currentSpeed) / Mathf.Max(0.5f, wheelbase) * Mathf.Rad2Deg * WallEndoShare);
             }
-            Vector3 velocity = forward * currentSpeed + Vector3.up * verticalSpeed;
+            // Au sol, verticalSpeed n'est que la petite poussée qui plaque le CharacterController sur la route :
+            // la transmettre enfoncerait la moto dans la chaussée. Seules comptent une vraie chute en l'air, ou
+            // la réception manquée elle-même.
+            float vertical = body.isGrounded && cause != CrashCause.Landing ? 0f : verticalSpeed;
+            Vector3 velocity = forward * currentSpeed + Vector3.up * vertical;
             wreck.Release(velocity, spin, pivot, body);
             if (!wreck.Free)
             {
@@ -1207,7 +1328,7 @@ namespace WheelingMoto.Gameplay
             if (riderEjection == null) return;
 
             float pace = Mathf.Abs(speed);
-            float share = Mathf.Clamp01(pace / Mathf.Max(0.1f, maxSpeed));
+            float share = Mathf.Clamp01(pace / Mathf.Max(0.1f, handlingFullSpeed));
             bool backwards = cause == CrashCause.Wheelie;
             float throwForward = backwards ? -1f : 1f;
 
@@ -1424,11 +1545,13 @@ namespace WheelingMoto.Gameplay
         /// </summary>
         void UpdateBrakesAndFork(float dt)
         {
-            bool braking = Brake && currentSpeed > -0.05f;
+            // Chaque commande suit son frein : levier droit pour l'avant, pédale pour l'arrière. La fourche ne
+            // plonge qu'au frein avant, qui charge la roue avant.
+            bool moving = currentSpeed > -0.05f;
             float frontWheelUp = FrontWheelUp();
             float rate = brakeLeverSpeed * dt;
-            frontBrakeWeight = Mathf.MoveTowards(frontBrakeWeight, braking ? 1f : 0f, rate);
-            rearBrakeWeight = Mathf.MoveTowards(rearBrakeWeight, braking ? 1f : 0f, rate);
+            frontBrakeWeight = Mathf.MoveTowards(frontBrakeWeight, FrontBrake && moving ? 1f : 0f, rate);
+            rearBrakeWeight = Mathf.MoveTowards(rearBrakeWeight, RearBrake && moving ? 1f : 0f, rate);
             throttle = Mathf.MoveTowards(throttle, Lift ? 1f : Accelerate ? 0.6f : 0f, ThrottleRate * dt);
 
             float dive = forkBrakeDive * frontBrakeWeight * Mathf.Clamp01(currentSpeed / 3f);

@@ -23,6 +23,15 @@ namespace WheelingMoto.UI
         const float BlinkRate = 7f;
         const float IdleAlpha = 0.35f;
 
+        /// <summary>Largeur de la barre, en unités de canvas.</summary>
+        public const float Width = 36f;
+        /// <summary>Place prise par le titre au-dessus de la barre.</summary>
+        public const float SpaceAbove = 42f;
+        /// <summary>Place prise par l'angle et le statut sous la barre.</summary>
+        public const float SpaceBelow = 82f;
+        // Le repère de l'angle déborde de la barre de chaque côté : la barre est décalée d'autant du bord.
+        const float MarkerOverhang = 8f;
+
         MotorcycleController controller;
         CanvasGroup group;
         Image frame;
@@ -34,13 +43,22 @@ namespace WheelingMoto.UI
         TextMeshProUGUI angleText;
         TextMeshProUGUI statusText;
 
-        public void Build(Transform parent, UITheme theme, MotorcycleController target)
+        /// <summary>
+        /// Construit la jauge le long du bord gauche de <paramref name="parent"/> (la zone sûre du HUD). La barre
+        /// s'étire sur toute la hauteur libre entre <paramref name="top"/> et <paramref name="bottom"/>, titre et
+        /// libellés compris : elle s'adapte à la hauteur de l'écran sans jamais chevaucher ses voisins.
+        /// </summary>
+        /// <param name="left">Retrait depuis le bord gauche, en unités de canvas.</param>
+        /// <param name="top">Distance du haut de la zone réservée (titre compris) au haut du parent.</param>
+        /// <param name="bottom">Distance du bas de la zone réservée (libellés compris) au bas du parent.</param>
+        public void Build(Transform parent, UITheme theme, MotorcycleController target, float left, float top, float bottom)
         {
             controller = target;
 
-            // Coin haut-droit, sous le bouton MENU ; le bas-droit est occupé par GAZ / FREIN / LEVER.
             var root = UIFactory.CreateUIObject("WheelieGauge", parent);
-            UIFactory.SetRect(root, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-78, -360), new Vector2(-42, -100));
+            float barLeft = left + MarkerOverhang;
+            UIFactory.SetRect(root, new Vector2(0f, 0f), new Vector2(0f, 1f),
+                new Vector2(barLeft, bottom + SpaceBelow), new Vector2(barLeft + Width, -top - SpaceAbove));
             group = root.gameObject.AddComponent<CanvasGroup>();
             group.interactable = false;
             group.blocksRaycasts = false;
@@ -57,12 +75,14 @@ namespace WheelingMoto.UI
 
             // Les trois libellés de la jauge sont passés au corps commun : leurs boîtes s'élargissent
             // d'autant, sans quoi le texte serait rogné au lieu d'être simplement plus gros.
-            titleText = UIFactory.AddText(root, "TitleText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-140, 8), new Vector2(140, 42));
-            angleText = UIFactory.AddText(root, "AngleText", "0°", UITheme.FontBody, theme.Text, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-90, -44), new Vector2(90, -8));
-            statusText = UIFactory.AddText(root, "StatusText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-140, -82), new Vector2(140, -46));
+            // Alignés sur le bord gauche de la jauge, donc sur la marge : ils ne débordent jamais de l'écran
+            // du côté de la Dynamic Island, quelle que soit la longueur du texte.
+            titleText = UIFactory.AddText(root, "TitleText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(-MarkerOverhang, 8), new Vector2(280, SpaceAbove));
+            angleText = UIFactory.AddText(root, "AngleText", "0°", UITheme.FontBody, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(-MarkerOverhang, -44), new Vector2(180, -8));
+            statusText = UIFactory.AddText(root, "StatusText", "", UITheme.FontLabel, theme.Text, TextAnchor.MiddleLeft,
+                new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(-MarkerOverhang, -SpaceBelow), new Vector2(280, -46));
         }
 
         public void Tick()
@@ -95,7 +115,7 @@ namespace WheelingMoto.UI
                 case WheelieZone.Critical:
                     accent = blinkOn ? CriticalColor : Color.white;
                     // Sur la roue avant, rien ne rattrape la moto au-delà de l'équilibre.
-                    status = stoppie ? "CHUTE !" : "FREINE !";
+                    status = stoppie ? "CHUTE !" : "FREIN AR !";
                     break;
                 default:
                     accent = Color.white;

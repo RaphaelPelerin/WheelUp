@@ -30,8 +30,8 @@ namespace WheelingMoto.Gameplay
         public float tyreWidth = 0.13f;
         [Tooltip("Largeur du bloc moteur et des repose-pieds, en part de l'écartement des poignées.")]
         public float frameWidthShare = 0.55f;
-        [Tooltip("Frottement des pneus : ils roulent, la moto debout file encore.")]
-        public float tyreFriction = 0.2f;
+        [Tooltip("Frottement des pneus, imposé quel que soit le sol. Les roues physiques ne tournent pas : un frottement faible les fait rouler au lieu de freiner la moto comme si elles étaient bloquées.")]
+        public float tyreFriction = 0.04f;
         [Tooltip("Frottement du cadre et du guidon qui raclent la route : la moto couchée s'arrête en quelques mètres.")]
         public float scrapeFriction = 0.5f;
         [Tooltip("Rebond sur un choc (0 : aucun).")]
@@ -45,6 +45,8 @@ namespace WheelingMoto.Gameplay
         Vector3 restPosition;
         Quaternion restRotation;
         Rigidbody body;
+        Vector3 massCenter;
+        Vector3 inertia;
         BoxCollider frame;
         Collider[] shapes;
         bool free;
@@ -100,8 +102,9 @@ namespace WheelingMoto.Gameplay
             float ground = Mathf.Min(rearContact.y, frontContact.y);
             Vector3 rearAxle = rearContact + Vector3.up * radius;
             Vector3 frontAxle = frontContact + Vector3.up * radius;
-            PhysicsMaterial tyres = Material("Tyres", tyreFriction);
-            PhysicsMaterial scrape = Material("Scrape", scrapeFriction);
+            // Pneus au frottement le plus faible des deux surfaces : rouler ne dépend pas du sol touché.
+            PhysicsMaterial tyres = Material("Tyres", tyreFriction, PhysicsMaterialCombine.Minimum);
+            PhysicsMaterial scrape = Material("Scrape", scrapeFriction, PhysicsMaterialCombine.Average);
             var built = new List<Collider>();
 
             // Roues : pneus arrondis de la largeur réelle. Debout, la moto ne repose que sur deux points.
@@ -109,12 +112,14 @@ namespace WheelingMoto.Gameplay
             built.Add(AddWheel("FrontWheel", frontAxle, radius, tyres));
 
             // Cadre : moteur, réservoir et selle, étroit comme les repose-pieds, avec un peu de garde au sol.
-            // Il s'arrête avant la roue avant, qui braque.
+            // Il s'arrête avant la roue avant, qui braque, et à l'aplomb de l'axe arrière : dépassant derrière,
+            // il plongerait dans la route dès que la moto est cabrée, et la repousserait sur sa roue avant au
+            // lieu de la laisser partir en arrière.
             float gripHalfSpan = Mathf.Abs(rightGrip.x - leftGrip.x) * 0.5f;
             float frameHalfWidth = Mathf.Max(tyreWidth, gripHalfSpan * frameWidthShare);
             float frameBottom = ground + radius * 0.6f;
             float frameTop = Mathf.Max(seat.y, frameBottom + radius);
-            float frameBack = rearAxle.z - radius * 0.5f;
+            float frameBack = rearAxle.z;
             float frameFront = Mathf.Max(frameBack + radius, frontAxle.z - radius * 1.1f);
             frame = gameObject.AddComponent<BoxCollider>();
             frame.center = new Vector3(centerX, (frameBottom + frameTop) * 0.5f, (frameBack + frameFront) * 0.5f);
@@ -142,11 +147,29 @@ namespace WheelingMoto.Gameplay
             body.isKinematic = true;
             // Masse posée à la main : les formes étant désactivées au repos, le calcul automatique n'aurait
             // rien sur quoi s'appuyer. Centre de gravité bas, entre les roues ; inertie d'un bloc de la taille
-            // du cadre (l'essentiel de la masse), sur toute la longueur de la moto.
-            body.centerOfMass = new Vector3(centerX, ground + bounds.size.y * centerOfMassHeight, (rearAxle.z + frontAxle.z) * 0.5f);
+            // du cadre (l'essentiel de la masse), sur toute la longueur de la moto. Appliquées à la libération
+            // seulement (voir ApplyMassProperties).
+            massCenter = new Vector3(centerX, ground + bounds.size.y * centerOfMassHeight, (rearAxle.z + frontAxle.z) * 0.5f);
             Vector3 s = new Vector3(frameHalfWidth * 2f, bounds.size.y, frontAxle.z - rearAxle.z + radius * 2f);
-            body.inertiaTensor = mass / 12f * new Vector3(s.y * s.y + s.z * s.z, s.x * s.x + s.z * s.z, s.x * s.x + s.y * s.y);
+            inertia = mass / 12f * new Vector3(s.y * s.y + s.z * s.z, s.x * s.x + s.z * s.z, s.x * s.x + s.y * s.y);
+        }
+
+        /// <summary>
+        /// Centre de gravité et inertie, posés sur la moto libérée, dans cet ordre. Mesuré sur PhysX (Unity
+        /// 6000.5) : régler l'inertie après le centre de gravité ramène celui-ci à l'origine du pivot — le
+        /// contact du pneu arrière au sol — et un corps cinématique n'en garde aucun. Posé au sol, le centre de
+        /// gravité n'offre aucun bras de levier à la gravité : la moto se balançait sans fin sur ses roues au
+        /// lieu de se coucher.
+        /// </summary>
+        void ApplyMassProperties()
+        {
             body.inertiaTensorRotation = Quaternion.identity;
+            body.inertiaTensor = inertia;
+            body.centerOfMass = massCenter;
+            if ((body.centerOfMass - massCenter).sqrMagnitude > 1e-6f)
+            {
+                Debug.LogWarning($"[MotoRagdoll] Centre de gravité refusé par la physique ({body.centerOfMass} au lieu de {massCenter}).", this);
+            }
         }
 
         /// <param name="velocity">Vitesse de la moto au moment de la chute, en m/s.</param>
@@ -168,6 +191,7 @@ namespace WheelingMoto.Gameplay
             }
 
             body.isKinematic = false;
+            ApplyMassProperties();
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             // Une moto qui tournait autour de son pneu arrière : son centre de gravité, lui, se déplaçait aussi.
@@ -267,12 +291,12 @@ namespace WheelingMoto.Gameplay
             return found;
         }
 
-        PhysicsMaterial Material(string name, float friction) => new PhysicsMaterial(name)
+        PhysicsMaterial Material(string name, float friction, PhysicsMaterialCombine combine) => new PhysicsMaterial(name)
         {
             dynamicFriction = friction,
             staticFriction = friction,
             bounciness = bounciness,
-            frictionCombine = PhysicsMaterialCombine.Average,
+            frictionCombine = combine,
             bounceCombine = PhysicsMaterialCombine.Average,
         };
     }

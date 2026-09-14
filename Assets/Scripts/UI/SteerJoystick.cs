@@ -7,7 +7,7 @@ namespace WheelingMoto.UI
     /// <summary>
     /// Joystick de direction, au choix dans les Paramètres à la place des flèches : on le pousse à gauche ou à
     /// droite, la direction suit l'écart ; relâché, il revient au milieu et la moto se redresse.
-    /// Seul l'axe horizontal compte. Un seul doigt le pilote : les autres restent libres pour GAZ, LEVER ou FREIN.
+    /// Seul l'axe horizontal compte. Un seul doigt le pilote : les autres restent libres pour GAZ, LEVER et les freins.
     /// </summary>
     public class SteerJoystick : MonoBehaviour, IInitializePotentialDragHandler, IPointerDownHandler, IDragHandler, IPointerUpHandler
     {

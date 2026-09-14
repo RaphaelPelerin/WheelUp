@@ -283,17 +283,24 @@ namespace WheelingMoto.UI
             bool has3D = motoPreview != null && motoPreview.Show(moto.ModelResourcePath);
             motoPlaceholder.gameObject.SetActive(!has3D);
 
+            // Deux chiffres de la fiche technique, mesurés sur la physique de conduite : ce qui attend le joueur.
+            MotoPerformance perf = MotoDrivetrain.Measure(MotoStats.For(moto));
+            string sprint = perf.ZeroTo100 > 0f
+                ? $"0-100 en {perf.ZeroTo100.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',')} s"
+                : $"0-50 en {perf.ZeroTo50.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',')} s";
+            string summary = $" · {Mathf.RoundToInt(perf.TopSpeedKmh)} km/h · {sprint}";
+
             if (has3D)
             {
                 MotoPainter.Apply(motoPreview.CurrentModel, moto.Name);
-                motoDetail.text = moto.Category;
+                motoDetail.text = moto.Category + summary;
             }
             else
             {
                 // La plupart des motos du catalogue n'ont pas encore de modèle. Le dire franchement
                 // vaut mieux qu'un cadre vide, qui se lirait comme un bug.
                 motoPlaceholder.text = moto.Name;
-                motoDetail.text = moto.Category + " · modèle 3D à venir";
+                motoDetail.text = moto.Category + summary + " · modèle 3D à venir";
             }
         }
 

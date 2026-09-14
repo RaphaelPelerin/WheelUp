@@ -70,8 +70,10 @@ namespace WheelingMoto.Data
             new AchievementInfo("a_stoppie", MissionMetric.StoppieTime, "Sur le nez",
                 "Passe {0} sur la roue avant", new[] { 60f, 300f, 1200f, 3600f }, Coins, FinalChest),
 
+            // Puissance d'une Ninja H2 (316 km/h en pointe) : 220 km/h demandent 250 m de ligne droite,
+            // 280 km/h près de 600 m — le dernier palier se mérite.
             new AchievementInfo("a_top_speed", MissionMetric.TopSpeed, "Plein gaz",
-                "Atteins {0}", new[] { 30f, 42f, 50f, 55f }, Coins, FinalChest),
+                "Atteins {0}", new[] { 100f, 160f, 220f, 280f }, Coins, FinalChest),
 
             // Kilométrage : la famille que tout le monde finit par avancer, même sans rien viser.
             new AchievementInfo("a_distance", MissionMetric.Distance, "Rouleur",
