@@ -5,7 +5,7 @@ using WheelingMoto.Core;
 
 namespace WheelingMoto.UI
 {
-    /// <summary>Onglet Paramètres : graphismes, audio et rappel des contrôles tactiles.</summary>
+    /// <summary>Onglet Paramètres : graphismes, audio, choix de la direction, disposition des commandes et rappel des contrôles tactiles.</summary>
     public class SettingsMenu
     {
         /// <summary>
@@ -15,9 +15,9 @@ namespace WheelingMoto.UI
         /// </summary>
         const string ControlsHelp =
             "« / » ou joystick\ndiriger la moto. Lâché, le joystick revient au milieu.\n\n" +
-            "GAZ\naccélérer.\n\n" +
+            "GAZ\naccélérer. En wheeling, il soutient la roue en l'air : on prend de la vitesse roue levée, en redonnant de petites touches de LEVER.\n\n" +
             "LEVER\naccélérer et lever la roue avant.\n\n" +
-            "FREIN AV\nfreine fort. Gardé serré en roulant vite, il lève l'arrière et met la moto sur la " +
+            "FREIN AV\nfreine progressivement. Gardé serré en roulant vite, il lève l'arrière et met la moto sur la " +
             "roue avant.\n\n" +
             "FREIN\nle frein principal : il arrête la moto franchement, gaz coupés comme au levier avant. En wheeling, ou LEVER tenu, il ne coupe plus les gaz et sert à rabattre la roue avant.\n\n" +
             "MARCHE ARRIÈRE\nà l'arrêt, reste appuyé sur l'un des deux freins.\n\n" +
@@ -105,10 +105,17 @@ namespace WheelingMoto.UI
                 new Vector2(0.5f, 1), new Vector2(1, 1), new Vector2(6, -164), new Vector2(-22, -108),
                 () => SelectSteering(SteeringControl.Joystick));
 
+            // La place des boutons de conduite se règle dans un éditeur plein écran, à leur taille réelle.
+            UIFactory.AddText(right.transform, "LayoutLabel", "Disposition des commandes", UITheme.FontLabel, theme.TextMuted, TextAnchor.MiddleLeft,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -228), new Vector2(-22, -196));
+            UIFactory.AddButton(right.transform, "LayoutButton", "PERSONNALISER", theme.PanelAlt, theme.Text, UITheme.FontLabel,
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -290), new Vector2(-22, -234),
+                OpenLayoutEditor);
+
             // Les achats ont quitté cet écran pour l'onglet Boutique : ils y côtoient les lots de
             // pièces, sous la même bannière que les coffres.
             adsStateText = UIFactory.AddText(right.transform, "AdsState", "", UITheme.FontLabel, theme.TextMuted, TextAnchor.UpperLeft,
-                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -300), new Vector2(-22, -196));
+                new Vector2(0, 1), new Vector2(1, 1), new Vector2(22, -426), new Vector2(-22, -322));
 
             UpdateQualityLabel();
             UpdateMasterLabel();
@@ -168,6 +175,14 @@ namespace WheelingMoto.UI
         {
             SettingsManager.Steering = control;
             RefreshSteeringButtons();
+        }
+
+        void OpenLayoutEditor()
+        {
+            var canvas = Root.GetComponentInParent<Canvas>();
+            if (canvas == null) return;
+
+            ControlLayoutEditor.Show(canvas.rootCanvas.transform, theme);
         }
 
         void RefreshSteeringButtons()
